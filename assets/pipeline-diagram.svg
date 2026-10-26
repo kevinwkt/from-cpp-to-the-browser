@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 420" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5b4b8a"/>
+    </marker>
+    <style>
+      .box { rx: 12; ry: 12; stroke-width: 2; }
+      .lbl { font-size: 16px; font-weight: 600; fill: #1c1430; }
+      .sub { font-size: 11px; fill: #6a6280; }
+      .stage { font-size: 12px; font-weight: 700; letter-spacing: .08em; fill: #5b4b8a; }
+      .edge { stroke: #5b4b8a; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <text x="40" y="44" font-size="22" font-weight="700" fill="#1c1430">From C++ to the Browser — the WebAssembly pipeline</text>
+
+  <!-- Row 1 -->
+  <!-- C++ -->
+  <rect class="box" x="40"  y="90"  width="150" height="78" fill="#efeafc" stroke="#5b4b8a"/>
+  <text class="stage" x="115" y="112" text-anchor="middle">SOURCE</text>
+  <text class="lbl"   x="115" y="138" text-anchor="middle">C / C++</text>
+  <text class="sub"   x="115" y="156" text-anchor="middle">add(a, b)</text>
+
+  <!-- Clang -->
+  <rect class="box" x="240" y="90" width="150" height="78" fill="#fff" stroke="#5b4b8a"/>
+  <text class="stage" x="315" y="112" text-anchor="middle">FRONTEND</text>
+  <text class="lbl"   x="315" y="138" text-anchor="middle">Clang</text>
+  <text class="sub"   x="315" y="156" text-anchor="middle">parse → lower</text>
+
+  <!-- LLVM IR -->
+  <rect class="box" x="440" y="90" width="150" height="78" fill="#fff" stroke="#5b4b8a"/>
+  <text class="stage" x="515" y="112" text-anchor="middle">IR</text>
+  <text class="lbl"   x="515" y="138" text-anchor="middle">LLVM IR</text>
+  <text class="sub"   x="515" y="156" text-anchor="middle">SSA, target-free</text>
+
+  <!-- opt -->
+  <rect class="box" x="640" y="90" width="150" height="78" fill="#fff" stroke="#5b4b8a"/>
+  <text class="stage" x="715" y="112" text-anchor="middle">OPTIMIZE</text>
+  <text class="lbl"   x="715" y="138" text-anchor="middle">opt passes</text>
+  <text class="sub"   x="715" y="156" text-anchor="middle">inline · DCE · fold</text>
+
+  <!-- backend -->
+  <rect class="box" x="840" y="90" width="150" height="78" fill="#fff" stroke="#5b4b8a"/>
+  <text class="stage" x="915" y="112" text-anchor="middle">BACKEND</text>
+  <text class="lbl"   x="915" y="138" text-anchor="middle">WASM backend</text>
+  <text class="sub"   x="915" y="156" text-anchor="middle">instr. selection</text>
+
+  <!-- wasm-ld -->
+  <rect class="box" x="1040" y="90" width="150" height="78" fill="#fff" stroke="#5b4b8a"/>
+  <text class="stage" x="1115" y="112" text-anchor="middle">LINK</text>
+  <text class="lbl"   x="1115" y="138" text-anchor="middle">wasm-ld</text>
+  <text class="sub"   x="1115" y="156" text-anchor="middle">LLD for WASM</text>
+
+  <!-- Row 1 edges -->
+  <path class="edge" d="M190 129 H240"/>
+  <path class="edge" d="M390 129 H440"/>
+  <path class="edge" d="M590 129 H640"/>
+  <path class="edge" d="M790 129 H840"/>
+  <path class="edge" d="M990 129 H1040"/>
+
+  <!-- connector down from wasm-ld to row 2 -->
+  <path class="edge" d="M1115 168 V210 H515 V250"/>
+
+  <!-- Row 2 -->
+  <!-- .wasm -->
+  <rect class="box" x="40"  y="250" width="150" height="78" fill="#efeafc" stroke="#5b4b8a"/>
+  <text class="stage" x="115" y="272" text-anchor="middle">ARTIFACT</text>
+  <text class="lbl"   x="115" y="298" text-anchor="middle">.wasm binary</text>
+  <text class="sub"   x="115" y="316" text-anchor="middle">portable bytecode</text>
+
+  <!-- wasm-opt -->
+  <rect class="box" x="240" y="250" width="150" height="78" fill="#fff" stroke="#5b4b8a"/>
+  <text class="stage" x="315" y="272" text-anchor="middle">POLISH</text>
+  <text class="lbl"   x="315" y="298" text-anchor="middle">wasm-opt</text>
+  <text class="sub"   x="315" y="316" text-anchor="middle">Binaryen, whole-module</text>
+
+  <!-- engine -->
+  <rect class="box" x="440" y="250" width="190" height="78" fill="#1c1430" stroke="#1c1430"/>
+  <text class="stage" x="535" y="272" text-anchor="middle" fill="#b9a8ec">JS ENGINE</text>
+  <text class="lbl"   x="535" y="298" text-anchor="middle" fill="#fff">V8 / SpiderMonkey</text>
+  <text class="sub"   x="535" y="316" text-anchor="middle" fill="#b1a9c9">validate → compile → run</text>
+
+  <!-- detail box: inside engine -->
+  <rect class="box" x="680" y="232" width="510" height="114" fill="#faf8ff" stroke="#cabdf0"/>
+  <text class="stage" x="700" y="258">INSIDE THE ENGINE</text>
+  <text class="sub" x="700" y="282" font-size="13">• validate — type-check every instruction (this is what makes it safe)</text>
+  <text class="sub" x="700" y="304" font-size="13">• tiered compile — Liftoff (instant) → optimizing compiler (peak speed)</text>
+  <text class="sub" x="700" y="326" font-size="13">• run in linear memory — one sandboxed ArrayBuffer; JS↔WASM boundary has a cost</text>
+
+  <!-- Row 2 edges -->
+  <path class="edge" d="M190 289 H240"/>
+  <path class="edge" d="M390 289 H440"/>
+  <path class="edge" d="M630 289 H680"/>
+
+  <text class="sub" x="40" y="400" font-size="12" fill="#8a83a6">The source code is for humans. The IR is for the optimizer. The .wasm is the product the engine runs.</text>
+</svg>
