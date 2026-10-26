@@ -4,6 +4,8 @@ Slides and live demo for my talk at **[JSConf México 2026](https://www.jsconf.m
 
 **Kyungtak Woo** · LLVM integration & release, Google Toolchains · [@kevinwkt](https://github.com/kevinwkt)
 
+**Live demo:** https://kevinwkt.github.io/from-cpp-to-the-browser/demo/ · **Slides (PDF):** https://kevinwkt.github.io/from-cpp-to-the-browser/slides/From-Cpp-to-the-Browser-JSConfMX-2026.pdf
+
 > WebAssembly is often described as "a faster JavaScript," but that description hides the most interesting part: the compiler pipeline that makes it possible. This talk follows one line of C++ through Clang, LLVM IR, the optimizer, the WebAssembly backend, the linker and Binaryen, and into V8. Then it turns to what it takes to run that pipeline for thousands of engineers.
 
 ## What's here
@@ -11,7 +13,7 @@ Slides and live demo for my talk at **[JSConf México 2026](https://www.jsconf.m
 | Path | What it is |
 |---|---|
 | [`slides/`](slides/) | The deck as PDF (25 slides) |
-| [`demo/`](demo/) | The live demo: a Mandelbrot set computed in C, rendered into WebAssembly linear memory, painted by JavaScript. Click to zoom. |
+| [`demo/`](demo/) | The live demo ([run it here](https://kevinwkt.github.io/from-cpp-to-the-browser/demo/)): a Mandelbrot set computed in C, rendered into WebAssembly linear memory, painted by JavaScript. Click to zoom. |
 | [`specimen/`](specimen/) | The one function the talk follows, with the real compiler output at every stage and a script to regenerate it |
 | [`assets/`](assets/) | The pipeline diagram and demo screenshots |
 
