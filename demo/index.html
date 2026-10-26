@@ -120,7 +120,7 @@
   });
 
   $('zoomOut').onclick = () => { view.scale = Math.min(view.scale / 0.45, HOME.scale); draw(); };
-  $('reset').onclick   = () => { view = { ...HOME }; draw(); };
+  $('reset').onclick   = () => { view = { ...HOME }; $('iter').value = 250; $('iterVal').textContent = '250'; draw(); };
   $('surprise').onclick = () => { view = { ...SPOTS[Math.floor(Math.random()*SPOTS.length)] }; draw(); };
   $('iter').oninput = () => { $('iterVal').textContent = $('iter').value; draw(); };
 </script>
