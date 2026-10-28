@@ -134,6 +134,6 @@ Timings in a background browser tab are throttled; run the race with the window 
 - LLVM: [Writing an LLVM Pass](https://llvm.org/docs/WritingAnLLVMNewPMPass.html), [LangRef](https://llvm.org/docs/LangRef.html) (SSA, `nsw`, `fmuladd`), [WebAssembly backend](https://github.com/llvm/llvm-project/tree/main/llvm/lib/Target/WebAssembly)
 - [wasm-ld documentation](https://lld.llvm.org/WebAssembly.html) (memory layout, exports, GC)
 - [WebAssembly specification](https://webassembly.github.io/spec/core/) (binary format, validation, `call_indirect`), [JS API](https://webassembly.github.io/spec/js-api/) (value conversion, `memory.grow` detaching)
-- V8: [Liftoff](https://v8.dev/blog/liftoff), [dynamic tiering](https://v8.dev/blog/wasm-dynamic-tiering), [faster calls](https://v8.dev/blog/wasm-calls), [BigInt and i64](https://v8.dev/features/wasm-bigint)
+- V8: [Liftoff](https://v8.dev/blog/liftoff), [dynamic tiering](https://v8.dev/blog/wasm-dynamic-tiering), [faster JS-to-Wasm calls (v9.0 notes)](https://v8.dev/blog/v8-release-90), [BigInt and i64](https://v8.dev/features/wasm-bigint)
 - [Binaryen](https://github.com/WebAssembly/binaryen), [Emscripten and the LLVM WebAssembly backend](https://v8.dev/blog/emscripten-llvm-wasm)
 - [WASM SIMD](https://github.com/WebAssembly/simd), [relaxed SIMD](https://github.com/WebAssembly/relaxed-simd), [Wasm 3.0 announcement](https://webassembly.org/news/2025-09-17-wasm-3.0/)
