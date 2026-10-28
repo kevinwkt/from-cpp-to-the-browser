@@ -13,7 +13,8 @@ Slides and live demo for my talk at **[JSConf México 2026](https://www.jsconf.m
 | Path | What it is |
 |---|---|
 | [`slides/`](slides/) | The deck as PDF (25 slides) |
-| [`demo/`](demo/) | The live demo ([run it here](https://kevinwkt.github.io/from-cpp-to-the-browser/demo/)): a Mandelbrot set computed in C, rendered into WebAssembly linear memory, painted by JavaScript. Click to zoom. |
+| [`demo/`](demo/) | The live demo ([run it here](https://kevinwkt.github.io/from-cpp-to-the-browser/demo/)): a pipeline explorer over four C++ specimens, a Mandelbrot renderer compiled at -O0…-O3 and with SIMD raced against plain JavaScript, and a JS ↔ WASM boundary lab. |
+| [`NOTES.md`](NOTES.md) | The theory behind every stage and every demo beat, with sources |
 | [`specimen/`](specimen/) | The one function the talk follows, with the real compiler output at every stage and a script to regenerate it |
 | [`assets/`](assets/) | The pipeline diagram and demo screenshots |
 
@@ -49,10 +50,10 @@ python3 -m http.server 8000   # .wasm must be served over http, not file://
 
 Toolchain for `build.sh`:
 
-- macOS: `brew install llvm lld binaryen`, then `export CLANG="$(brew --prefix llvm)/bin/clang"` (Apple's clang has no WebAssembly backend; `lld` is a separate formula and provides `wasm-ld`).
-- Linux: `sudo apt-get install clang lld binaryen`.
+- macOS: `brew install llvm lld wabt`, then `export CLANG="$(brew --prefix llvm)/bin/clang"` (Apple's clang has no WebAssembly backend; `lld` is a separate formula and provides `wasm-ld`).
+- Linux: `sudo apt-get install clang lld wabt`.
 
-No Emscripten, no libc. `fractal.c` is compiled with `clang --target=wasm32 -O3 -nostdlib`, and `index.html` loads it with one `fetch` and one `WebAssembly.instantiateStreaming`. See [`demo/README.md`](demo/README.md).
+No Emscripten, no libc, no libc++. `fractal.cpp` is compiled with `clang++ --target=wasm32 -nostdlib` at five optimization levels, and `index.html` loads them with one `fetch` and one `WebAssembly.instantiateStreaming` each. See [`demo/README.md`](demo/README.md).
 
 ## The pipeline
 

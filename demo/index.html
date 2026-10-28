@@ -3,126 +3,525 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mandelbrot in C → WASM · JSConf Mexico</title>
+  <title>From C++ to the Browser · live demo</title>
   <style>
     :root {
       --ink:#1C1430; --violet:#5B4B8A; --mint:#1FB6A6; --lilac:#EFEAFC; --muted:#6A6280;
+      --panel:#1b1530; --panel2:#241c3f; --code:#e9e4ff; --warn:#e0a000;
     }
     * { box-sizing: border-box; }
-    body { font: 16px/1.5 system-ui, -apple-system, sans-serif; color: var(--ink);
-           background: #faf8ff; margin: 0; padding: 4vh 20px; }
-    .wrap { max-width: 780px; margin: 0 auto; }
-    h1 { font: 700 1.5rem/1.2 Georgia, serif; margin: 0 0 .2rem; }
-    .sub { color: var(--muted); margin: 0 0 1.2rem; }
-    canvas { width: 100%; height: auto; border-radius: 12px; cursor: crosshair;
-             box-shadow: 0 10px 40px rgba(28,20,48,.25); display: block; background:#000; }
-    .bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: 1rem 0; }
-    button { font: 600 .95rem system-ui; padding: .5rem .9rem; border: 0; border-radius: 8px;
+    html, body { margin: 0; }
+    body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink);
+           background: #faf8ff; padding: 18px 22px 40px; }
+    h1 { font: 700 1.55rem/1.2 Georgia, serif; margin: 0; }
+    h2 { font: 700 1.25rem/1.2 Georgia, serif; margin: 0 0 .25rem; }
+    .sub { color: var(--muted); margin: .15rem 0 .9rem; }
+    .top { display: flex; align-items: baseline; gap: 1.2rem; flex-wrap: wrap; }
+    nav { display: flex; gap: .4rem; margin: .6rem 0 1.1rem; flex-wrap: wrap; }
+    nav button { font: 600 .95rem system-ui; padding: .5rem .95rem; border: 2px solid var(--violet);
+                 border-radius: 999px; background: #fff; color: var(--violet); cursor: pointer; }
+    nav button.on { background: var(--violet); color: #fff; }
+    nav kbd { font: 600 .75rem system-ui; opacity: .7; margin-left: .35rem; }
+    section.tab { display: none; }
+    section.tab.on { display: block; }
+    button { font: 600 .9rem system-ui; padding: .45rem .85rem; border: 0; border-radius: 8px;
              background: var(--violet); color: #fff; cursor: pointer; }
     button.ghost { background: var(--lilac); color: var(--ink); }
+    button.mint { background: var(--mint); }
     button:active { transform: translateY(1px); }
+    button:disabled { opacity: .45; cursor: default; }
+    .chips { display: flex; gap: .4rem; flex-wrap: wrap; margin: .4rem 0 .8rem; }
+    .chips button { background: var(--lilac); color: var(--ink); }
+    .chips button.on { background: var(--ink); color: #fff; }
+    .blurb { color: var(--muted); max-width: 1100px; margin: 0 0 .8rem; }
+    .counts { display: flex; gap: 1.6rem; flex-wrap: wrap; font-variant-numeric: tabular-nums; margin: .2rem 0 .8rem; }
+    .counts b { font: 700 1.5rem Georgia, serif; display: block; line-height: 1.1; }
+    .counts span { color: var(--muted); font-size: .8rem; }
+    .arrow { align-self: center; color: var(--mint); font-size: 1.4rem; }
+    .cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; }
+    .pane { background: var(--panel); color: var(--code); border-radius: 12px; overflow: hidden;
+            display: flex; flex-direction: column; min-height: 200px; }
+    .pane h3 { margin: 0; padding: .5rem .8rem; font: 700 .72rem system-ui; letter-spacing: .08em;
+               text-transform: uppercase; color: #b7a9ee; background: var(--panel2); display: flex; justify-content: space-between; }
+    .pane h3 em { font-style: normal; color: var(--mint); }
+    .pane pre { margin: 0; padding: .7rem .8rem; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+                overflow: auto; max-height: 50vh; white-space: pre; tab-size: 4; flex: 1; }
+    .pane.light { background: var(--lilac); color: var(--ink); }
+    .pane.light h3 { background: #e3dcfa; color: var(--violet); }
+    .kw { color: #8fe3d8; } .cm { color: #8a80b0; } .num { color: #ffd479; } .op { color: #c9b8ff; }
+    .bytes { margin-top: .8rem; background: var(--panel); color: var(--code); border-radius: 12px; padding: .7rem .9rem; }
+    .bytes h3 { margin: 0 0 .45rem; font: 700 .72rem system-ui; letter-spacing: .08em; text-transform: uppercase; color: #b7a9ee; }
+    .hex { font: 12px/1.6 ui-monospace, Menlo, monospace; word-break: break-all; }
+    .hex span { padding: 1px 0; border-radius: 3px; cursor: default; }
+    .hex span.hl { outline: 2px solid #fff; }
+    .legend { display: flex; flex-wrap: wrap; gap: .35rem .9rem; margin-top: .5rem; font-size: .82rem; }
+    .legend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; vertical-align: -1px; margin-right: .3rem; }
+    .legend b { font-weight: 600; } .legend span { color: #b7a9ee; }
+    /* race */
+    .race { display: grid; grid-template-columns: minmax(0, 760px) minmax(320px, 1fr); gap: 1.2rem; align-items: start; }
+    canvas { width: 100%; height: auto; border-radius: 12px; cursor: crosshair; display: block; background: #000;
+             box-shadow: 0 10px 40px rgba(28,20,48,.25); }
+    .bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .8rem 0; }
     label { color: var(--muted); font-size: .9rem; }
     input[type=range] { vertical-align: middle; accent-color: var(--mint); }
-    .stats { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: .6rem;
-             font-variant-numeric: tabular-nums; }
-    .stat b { font: 700 1.4rem Georgia, serif; color: var(--ink); display: block; }
+    .stats { display: flex; gap: 1.4rem; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+    .stat b { font: 700 1.5rem Georgia, serif; display: block; line-height: 1.1; }
     .stat span { color: var(--muted); font-size: .8rem; }
-    .mint { color: var(--mint); }
-    code { background: var(--lilac); padding: .1rem .35rem; border-radius: 5px; }
-    .hint { color: var(--muted); font-size: .9rem; margin-top: .8rem; }
+    .mintc { color: var(--mint); }
+    .builds { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .builds button { background: var(--lilac); color: var(--ink); font-family: ui-monospace, Menlo, monospace; }
+    .builds button.on { background: var(--ink); color: #fff; }
+    .builds button.na { text-decoration: line-through; }
+    .chart { margin-top: .6rem; }
+    .row { display: grid; grid-template-columns: 9.5rem 1fr 7rem; gap: .6rem; align-items: center; margin: .35rem 0;
+           font-variant-numeric: tabular-nums; font-size: .92rem; }
+    .row .name { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
+    .row .track { background: var(--lilac); border-radius: 6px; height: 1.35rem; overflow: hidden; }
+    .row .fill { height: 100%; background: var(--violet); border-radius: 6px; width: 0; transition: width .25s; }
+    .row.js .fill { background: var(--warn); }
+    .row.best .fill { background: var(--mint); }
+    .row .val { text-align: right; color: var(--ink); }
+    .row .val small { color: var(--muted); }
+    .note { color: var(--muted); font-size: .9rem; margin-top: .6rem; }
+    .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600;
+             background: #d9f5f1; color: #0e7f74; }
+    .badge.bad { background: #fde7e7; color: #a12; }
+    /* boundary lab */
+    .lab { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: .9rem; }
+    .card { background: #fff; border: 1px solid #e6e0f7; border-radius: 12px; padding: .9rem 1rem; }
+    .card h3 { margin: 0 0 .2rem; font: 700 1.05rem Georgia, serif; }
+    .card p { margin: .2rem 0 .6rem; color: var(--muted); font-size: .9rem; }
+    .card input[type=text], .card input[type=number] { font: 14px ui-monospace, Menlo, monospace; padding: .4rem .5rem;
+             border: 1px solid #cfc6ee; border-radius: 6px; }
+    .card input[type=number] { width: 8rem; }
+    .card input[type=text] { width: 100%; }
+    .card .out { margin-top: .5rem; background: var(--panel); color: var(--code); border-radius: 8px; padding: .6rem .7rem;
+                 font: 13px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; min-height: 2.4rem; }
+    .card .row2 { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .3rem 0; }
+    footer { color: var(--muted); font-size: .82rem; margin-top: 1.6rem; }
+    footer kbd { font: 600 .78rem ui-monospace, Menlo, monospace; background: var(--lilac); padding: .05rem .35rem; border-radius: 4px; }
+    #status { color: #a12; }
   </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>A Mandelbrot set, computed in C, running in your browser</h1>
-  <p class="sub">C writes the pixels straight into WebAssembly memory; JavaScript paints them.
-     <b>Click the image to zoom in.</b></p>
-
-  <canvas id="cv" width="720" height="480"></canvas>
-
-  <div class="bar">
-    <button id="zoomOut" class="ghost">Zoom out</button>
-    <button id="reset" class="ghost">Reset</button>
-    <button id="surprise">Surprise me ✨</button>
-    <label>detail (maxIter): <input id="iter" type="range" min="80" max="1200" value="250" step="10">
-      <span id="iterVal">250</span></label>
-  </div>
-
-  <div class="stats">
-    <div class="stat"><b id="ms" class="mint">—</b><span>render time</span></div>
-    <div class="stat"><b id="zoom">1×</b><span>zoom</span></div>
-    <div class="stat"><b id="work">—</b><span>avg iterations / pixel</span></div>
-  </div>
-
-  <p class="hint">Every click recomputes the whole image in C. As you zoom or raise the detail
-     slider, watch the <span class="mint">render time</span> climb — that's the cost of real
-     compute, happening in a sandbox next to your JavaScript. <span id="status"></span></p>
+<div class="top">
+  <h1>From C++ to the Browser · live</h1>
+  <span class="sub" id="compiler">loading…</span>
 </div>
+<nav>
+  <button data-tab="pipe" class="on">1 · The pipeline <kbd>1</kbd></button>
+  <button data-tab="race">2 · The optimizer, measured <kbd>2</kbd></button>
+  <button data-tab="lab">3 · The boundary lab <kbd>3</kbd></button>
+</nav>
+<div id="status"></div>
+
+<!-- ============================ 1. PIPELINE ============================ -->
+<section class="tab on" id="tab-pipe">
+  <h2>One function, every stage</h2>
+  <p class="sub">Real compiler output. Pick a specimen; read left to right.</p>
+  <div class="chips" id="specimens"></div>
+  <p class="blurb" id="blurb"></p>
+  <div class="counts" id="counts"></div>
+  <div class="cols">
+    <div class="pane light"><h3>C++ <em>for humans</em></h3><pre id="src"></pre></div>
+    <div class="pane"><h3>LLVM IR · -O0 <em id="c-ir0"></em></h3><pre id="ir0"></pre></div>
+    <div class="pane"><h3>LLVM IR · -O2 <em id="c-ir2"></em></h3><pre id="ir2"></pre></div>
+    <div class="pane"><h3>WebAssembly · wasm2wat <em id="c-wat"></em></h3><pre id="wat"></pre></div>
+  </div>
+  <div class="bytes">
+    <h3>The bytes the browser downloads · <span id="c-bytes"></span></h3>
+    <div class="hex" id="hex"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+</section>
+
+<!-- ============================ 2. RACE ============================ -->
+<section class="tab" id="tab-race">
+  <h2>Same source, five compilers' worth of effort</h2>
+  <p class="sub">fractal.cpp compiled at -O0, -O1, -O2, -O3 and -O3 -msimd128, plus the same algorithm in plain JavaScript. Click the set to zoom.</p>
+  <div class="race">
+    <div>
+      <canvas id="cv" width="720" height="480"></canvas>
+      <div class="bar">
+        <button id="zoomOut" class="ghost">Zoom out</button>
+        <button id="reset" class="ghost">Reset</button>
+        <button id="surprise">Surprise me ✨</button>
+        <label>detail (maxIter): <input id="iter" type="range" min="80" max="1200" value="250" step="10">
+          <span id="iterVal">250</span></label>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="ms" class="mintc">—</b><span>render time</span></div>
+        <div class="stat"><b id="zoom">1×</b><span>zoom</span></div>
+        <div class="stat"><b id="work">—</b><span>avg iterations / pixel</span></div>
+        <div class="stat"><b id="bsize">—</b><span>module size</span></div>
+        <div class="stat"><b id="binstr">—</b><span>wasm instructions</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="builds" id="builds"></div>
+      <div class="bar"><button id="raceBtn" class="mint">Race all ▶</button> <span id="raceNote" class="note"></span></div>
+      <div class="chart" id="chart"></div>
+      <p class="note" id="identical"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 3. BOUNDARY LAB ============================ -->
+<section class="tab" id="tab-lab">
+  <h2>Crossing JS ↔ WASM</h2>
+  <p class="sub">Everything below calls into the same module that draws the fractal. Only numbers cross directly; everything else is memory.</p>
+  <div class="lab">
+    <div class="card">
+      <h3>Only numbers cross</h3>
+      <p><code>instance.exports.add(a, b)</code> is just a function call. i32 in, i32 out.</p>
+      <div class="row2"><input id="addA" type="number" value="20"> <input id="addB" type="number" value="2"> <button id="addBtn">Call add</button></div>
+      <div class="out" id="addOut"></div>
+    </div>
+    <div class="card">
+      <h3>i64 arrives as a BigInt</h3>
+      <p>JavaScript numbers lose integers above 2<sup>53</sup>. A WASM i64 doesn't, so it crosses as a BigInt.</p>
+      <div class="row2"><button id="bigBtn">add64(2n ** 53n, 1n)</button></div>
+      <div class="out" id="bigOut"></div>
+    </div>
+    <div class="card">
+      <h3>Strings are pointer + length</h3>
+      <p>Encode to UTF-8, write the bytes into WASM memory, pass the pointer and length. C++ uppercases in place; JS decodes the same bytes.</p>
+      <div class="row2"><input id="strIn" type="text" value="¡Hola, JSConf México! C++ en tu navegador."></div>
+      <div class="row2"><button id="strBtn">Write · upcase() · read back</button></div>
+      <div class="out" id="strOut"></div>
+    </div>
+    <div class="card">
+      <h3>Arrays too</h3>
+      <p>An <code>Int32Array</code> view onto the scratch area; C++ reads it through the pointer.</p>
+      <div class="row2"><input id="arrIn" type="text" value="1, 2, 3, 4, 5, 6, 7, 8, 9, 10"></div>
+      <div class="row2"><button id="arrBtn">sum_i32(ptr, len)</button></div>
+      <div class="out" id="arrOut"></div>
+    </div>
+    <div class="card">
+      <h3>memory.grow() detaches old views</h3>
+      <p>Grow the memory by one 64 KiB page. The old typed array goes dead. Re-create it and it's fine.</p>
+      <div class="row2"><button id="growBtn">memory.grow(1)</button> <button id="reviewBtn" class="ghost">Re-create the view</button></div>
+      <div class="out" id="growOut"></div>
+    </div>
+    <div class="card">
+      <h3>What the module exports</h3>
+      <p>Everything JavaScript can see. No globals, no DOM, no ambient access: just these.</p>
+      <div class="out" id="exportsOut"></div>
+    </div>
+  </div>
+</section>
+
+<footer>Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> switch tabs · <kbd>R</kbd> race · <kbd>S</kbd> surprise me · <kbd>Z</kbd> zoom out · <kbd>0</kbd> reset · <kbd>+</kbd> <kbd>-</kbd> page zoom ·
+  <a href="basic.html">the simple version of this demo</a></footer>
 
 <script type="module">
-  const $ = id => document.getElementById(id);
-  const cv = $('cv'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const status = msg => { $('status').textContent = msg; };
 
-  // View state in the complex plane.
-  const HOME = { cx: -0.6, cy: 0.0, scale: 1.6 };
-  let view = { ...HOME };
-  let W = 720, H = 480, ex = null, mem = null, ptr = null;
+/* ------------------------------------------------------------------ tabs */
+const tabs = [...document.querySelectorAll('nav button')];
+function showTab(name) {
+  tabs.forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + name));
+  if (name === 'race') draw();
+}
+tabs.forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
-  // A few genuinely pretty coordinates for "Surprise me".
-  const SPOTS = [
-    { cx: -0.743643887, cy: 0.131825904, scale: 0.012 },  // seahorse valley
-    { cx: -0.7435669,   cy: 0.1314023,   scale: 0.0008 },  // deep spiral
-    { cx: 0.2929859127, cy: 0.6117848324, scale: 0.004 },
-    { cx: -1.25066,     cy: 0.02012,      scale: 0.0035 },
-    { cx: -0.16070135,  cy: 1.0375665,    scale: 0.004 },
-  ];
+/* ------------------------------------------------------------------ 1. pipeline */
+let data = null;
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function hiIR(s) {
+  return esc(s)
+    .replace(/(;.*)$/gm, '<span class="cm">$1</span>')
+    .replace(/\b(define|ret|alloca|store|load|br|phi|call|select|icmp|fcmp|mul|add|sub|shl|fmul|fadd|fsub|fneg|getelementptr|unreachable|constant|global|internal)\b/g, '<span class="kw">$1</span>')
+    .replace(/\b(i32|i64|i8|i1|ptr|double|float|void|label)\b/g, '<span class="op">$1</span>');
+}
+function hiWAT(s) {
+  return esc(s)
+    .replace(/(;;.*)$/gm, '<span class="cm">$1</span>')
+    .replace(/\b(func|param|result|local|export|memory|table|elem|data|type|module)\b/g, '<span class="op">$1</span>')
+    .replace(/\b((?:i32|i64|f64|f32|v128|f64x2)\.[\w.]+|local\.(?:get|set|tee)|call_indirect|call|loop|block|br_if|br|if|end|else|return|select|unreachable|global\.get|global\.set)\b/g, '<span class="kw">$1</span>');
+}
+function hiCPP(s) {
+  return esc(s)
+    .replace(/(\/\/.*)$/gm, '<span class="cm">$1</span>')
+    .replace(/\b(template|typename|struct|constexpr|static|inline|extern|return|while|for|if|const|virtual|override|using|int|double|unsigned|char|void)\b/g, '<span class="kw">$1</span>');
+}
+const SECTION_COLORS = { 'magic + version': '#6a6280', type: '#5B4B8A', function: '#7c6bb5', table: '#b4627a', memory: '#2a8a7f',
+  global: '#8a6a2a', export: '#1FB6A6', elem: '#d6508a', code: '#e0a000', data: '#3d7fd6', datacount: '#3d7fd6' };
+function colorFor(name) { return SECTION_COLORS[name] || (name.startsWith('custom') ? '#4a4466' : '#777'); }
 
-  try {
-    const r = await fetch('fractal.wasm');
-    const { instance } = await WebAssembly.instantiateStreaming(r, {});
-    ex = instance.exports;
-    mem = ex.memory;
-    W = ex.width(); H = ex.height();
-    cv.width = W; cv.height = H;
-    ptr = ex.buffer();
-    draw();
-  } catch (e) {
-    $('status').textContent = '⚠ Could not load fractal.wasm — run ./build.sh and serve over http. ' + e;
-  }
-
-  function draw() {
-    if (!ex) return;
-    const maxIter = +$('iter').value;
-    const t0 = performance.now();
-    const avg = ex.render(view.cx, view.cy, view.scale, maxIter);
-    const dt = performance.now() - t0;
-
-    // The shared-memory moment: read C's pixels directly out of WASM memory.
-    const bytes = new Uint8ClampedArray(mem.buffer, ptr, W * H * 4);
-    const img = ctx.createImageData(W, H);
-    img.data.set(bytes);
-    ctx.putImageData(img, 0, 0);
-
-    $('ms').textContent = dt.toFixed(1) + ' ms';
-    $('zoom').textContent = Math.round(HOME.scale / view.scale) + '×';
-    $('work').textContent = avg;
-  }
-
-  cv.addEventListener('click', (e) => {
-    const rect = cv.getBoundingClientRect();
-    const px = (e.clientX - rect.left) / rect.width;
-    const py = (e.clientY - rect.top) / rect.height;
-    const aspect = H / W;
-    view.cx += ((px * 2) - 1) * view.scale;
-    view.cy += ((py * 2) - 1) * view.scale * aspect;
-    view.scale *= 0.45;            // zoom in
-    draw();
+function showSpecimen(id) {
+  const s = data.specimens.find(x => x.id === id);
+  document.querySelectorAll('#specimens button').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  $('blurb').textContent = s.blurb;
+  $('src').innerHTML = hiCPP(s.source);
+  $('ir0').innerHTML = hiIR(s.ir_O0);
+  $('ir2').innerHTML = hiIR(s.ir_O2);
+  $('wat').innerHTML = hiWAT(s.wat);
+  const c = s.counts;
+  $('c-ir0').textContent = c.ir_O0 + ' instr'; $('c-ir2').textContent = c.ir_O2 + ' instr'; $('c-wat').textContent = c.wat + ' instr';
+  $('c-bytes').textContent = c.bytes + ' bytes';
+  const codeSec = s.sections.find(x => x.name === 'code');
+  $('counts').innerHTML =
+    `<div><b>${c.ir_O0}</b><span>IR instructions at -O0</span></div><div class="arrow">→</div>` +
+    `<div><b>${c.ir_O2}</b><span>at -O2</span></div><div class="arrow">→</div>` +
+    `<div><b>${c.wat}</b><span>WebAssembly instructions</span></div><div class="arrow">→</div>` +
+    `<div><b>${c.bytes}</b><span>bytes on the wire${codeSec ? `, ${codeSec.length} of them code` : ''}</span></div>`;
+  $('hex').innerHTML = s.sections.map((sec, i) =>
+    `<span data-i="${i}" style="background:${colorFor(sec.name)};color:#fff" title="${sec.name}: ${sec.length} bytes">${sec.hex.replace(/(..)/g, '$1 ')}</span>`).join('');
+  $('legend').innerHTML = s.sections.map((sec, i) =>
+    `<div data-i="${i}"><i style="background:${colorFor(sec.name)}"></i><b>${sec.name}</b> <span>${sec.length} B</span></div>`).join('');
+  const hl = (i, on) => document.querySelectorAll(`#hex span[data-i="${i}"]`).forEach(e => e.classList.toggle('hl', on));
+  document.querySelectorAll('#legend div, #hex span').forEach(e => {
+    e.onmouseenter = () => hl(e.dataset.i, true); e.onmouseleave = () => hl(e.dataset.i, false);
   });
+}
 
-  $('zoomOut').onclick = () => { view.scale = Math.min(view.scale / 0.45, HOME.scale); draw(); };
-  $('reset').onclick   = () => { view = { ...HOME }; $('iter').value = 250; $('iterVal').textContent = '250'; draw(); };
-  $('surprise').onclick = () => { view = { ...SPOTS[Math.floor(Math.random()*SPOTS.length)] }; draw(); };
-  $('iter').oninput = () => { $('iterVal').textContent = $('iter').value; draw(); };
+/* ------------------------------------------------------------------ 2. race: modules */
+const BUILD_IDS = ['O0', 'O1', 'O2', 'O3', 'O3-simd'];
+const BUILD_LABEL = { js: 'JavaScript', O0: '-O0', O1: '-O1', O2: '-O2', O3: '-O3', 'O3-simd': '-O3 -msimd128' };
+const mods = {};              // id -> { ex, mem, ptr, W, H, bytes, instructions }
+let current = 'O3';
+const HOME = { cx: -0.6, cy: 0.0, scale: 1.6 };
+let view = { ...HOME };
+let W = 720, H = 480;
+const SPOTS = [
+  { cx: -0.743643887, cy: 0.131825904, scale: 0.012 },   // seahorse valley
+  { cx: -0.7435669,   cy: 0.1314023,   scale: 0.0008 },  // deep spiral
+  { cx: 0.2929859127, cy: 0.6117848324, scale: 0.004 },
+  { cx: -1.25066,     cy: 0.02012,      scale: 0.0035 },
+  { cx: -0.16070135,  cy: 1.0375665,    scale: 0.004 },
+];
+const cv = $('cv'), ctx = cv.getContext('2d');
+
+async function loadModule(id) {
+  const r = await fetch(`fractal-${id}.wasm`);
+  const { instance } = await WebAssembly.instantiateStreaming(r, {});
+  const ex = instance.exports;
+  return { id, ex, mem: ex.memory, ptr: ex.buffer(), W: ex.width(), H: ex.height() };
+}
+
+/* The same algorithm in plain JavaScript, written to match fractal.cpp operation for operation. */
+const PAL = new Uint8ClampedArray(256 * 3);
+for (let i = 0; i < 256; i++) {
+  const t = i / 255.0;
+  PAL[i * 3]     = Math.trunc(9.0  * (1 - t) * t * t * t * 255.0);
+  PAL[i * 3 + 1] = Math.trunc(15.0 * (1 - t) * (1 - t) * t * t * 255.0);
+  PAL[i * 3 + 2] = Math.trunc(8.5  * (1 - t) * (1 - t) * (1 - t) * t * 255.0);
+}
+let jsPix = null;
+function renderJS(cx, cy, scale, maxIter) {
+  const aspect = H / W; let total = 0, idx = 0;
+  for (let py = 0; py < H; py++) {
+    const y0 = cy + ((py / H) * 2.0 - 1.0) * scale * aspect;
+    for (let px = 0; px < W; px++) {
+      const x0 = cx + ((px / W) * 2.0 - 1.0) * scale;
+      let x = 0.0, y = 0.0, it = 0;
+      while (x * x + y * y <= 4.0 && it < maxIter) {
+        const xt = (x * x - y * y) + x0;
+        y = (x * y + y * x) + y0;
+        x = xt; it++;
+      }
+      total += it;
+      if (it >= maxIter) { jsPix[idx] = jsPix[idx + 1] = jsPix[idx + 2] = 0; }
+      else { const k = Math.trunc((it * 255) / maxIter) * 3; jsPix[idx] = PAL[k]; jsPix[idx + 1] = PAL[k + 1]; jsPix[idx + 2] = PAL[k + 2]; }
+      jsPix[idx + 3] = 255; idx += 4;
+    }
+  }
+  return Math.trunc(total / (W * H));
+}
+
+/* Render the current view with one build. Returns { ms, avg, pixels }. */
+function renderWith(id, maxIter) {
+  if (id === 'js') {
+    const t0 = performance.now();
+    const avg = renderJS(view.cx, view.cy, view.scale, maxIter);
+    return { ms: performance.now() - t0, avg, pixels: jsPix };
+  }
+  const m = mods[id];
+  const t0 = performance.now();
+  const avg = m.ex.render(view.cx, view.cy, view.scale, maxIter);
+  const ms = performance.now() - t0;
+  return { ms, avg, pixels: new Uint8ClampedArray(m.mem.buffer, m.ptr, W * H * 4) };   // a view, not a copy
+}
+function paint(pixels) {
+  const img = ctx.createImageData(W, H);
+  img.data.set(pixels);          // the only copy: onto the canvas
+  ctx.putImageData(img, 0, 0);
+}
+function draw() {
+  if (!mods[current] && current !== 'js') return;
+  const maxIter = +$('iter').value;
+  const r = renderWith(current, maxIter);
+  paint(r.pixels);
+  $('ms').textContent = r.ms.toFixed(1) + ' ms';
+  $('zoom').textContent = Math.round(HOME.scale / view.scale).toLocaleString() + '×';
+  $('work').textContent = r.avg;
+  const b = data && data.builds.find(x => x.id === current);
+  $('bsize').textContent = b ? b.bytes.toLocaleString() + ' B' : (current === 'js' ? 'n/a' : '—');
+  $('binstr').textContent = b ? b.instructions.toLocaleString() : (current === 'js' ? 'JIT' : '—');
+}
+function selectBuild(id) {
+  current = id;
+  document.querySelectorAll('#builds button').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  draw();
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let racing = false;
+async function race() {
+  if (racing) return;
+  racing = true; $('raceBtn').disabled = true;
+  const maxIter = +$('iter').value;
+  const order = ['js', ...BUILD_IDS].filter(id => id === 'js' || mods[id]);
+  const chart = $('chart'); chart.innerHTML = '';
+  const rows = {};
+  for (const id of order) {
+    const row = document.createElement('div');
+    row.className = 'row' + (id === 'js' ? ' js' : '');
+    row.innerHTML = `<div class="name">${BUILD_LABEL[id]}</div><div class="track"><div class="fill"></div></div><div class="val">…</div>`;
+    chart.appendChild(row); rows[id] = row;
+  }
+  const results = {};
+  let maxMs = 0;
+  const digests = {};
+  for (const id of order) {
+    $('raceNote').textContent = `rendering with ${BUILD_LABEL[id]}…`;
+    await sleep(30);
+    renderWith(id, maxIter);                                  // warm-up (JIT tiers, caches)
+    let best = Infinity, last = null;
+    for (let i = 0; i < 3; i++) { last = renderWith(id, maxIter); best = Math.min(best, last.ms); }
+    paint(last.pixels);
+    results[id] = best; maxMs = Math.max(maxMs, best);
+    let h = 0; const p = last.pixels; for (let i = 0; i < p.length; i += 4) h = (h * 31 + p[i] + p[i + 1] * 7 + p[i + 2] * 13) | 0;
+    digests[id] = h + ':' + last.avg;
+    for (const k of order) if (results[k] !== undefined) {
+      rows[k].querySelector('.fill').style.width = (100 * results[k] / maxMs).toFixed(1) + '%';
+      const ref = results['O3'] ?? results[order[order.length - 1]];
+      rows[k].querySelector('.val').innerHTML = `${results[k].toFixed(1)} ms` + (k !== 'O3' && results['O3'] !== undefined ? ` <small>${(results[k] / results['O3']).toFixed(2)}×</small>` : '');
+    }
+  }
+  const bestId = order.reduce((a, b) => results[a] <= results[b] ? a : b);
+  rows[bestId].classList.add('best');
+  const same = order.every(id => digests[id] === digests[order[0]]);
+  $('identical').innerHTML = same
+    ? `<span class="badge">identical pixels from all ${order.length}</span> Same meaning, different machine. Best of 3 runs each, after a warm-up.`
+    : `<span class="badge bad">outputs differ</span> ${order.map(id => BUILD_LABEL[id] + ': ' + digests[id].split(':')[1]).join(' · ')}`;
+  $('raceNote').textContent = `maxIter ${maxIter}, ${(HOME.scale / view.scale).toFixed(0)}× zoom. Times are ×  relative to -O3.`;
+  racing = false; $('raceBtn').disabled = false;
+  selectBuild(current);
+}
+
+/* ------------------------------------------------------------------ 3. boundary lab */
+const enc = new TextEncoder(), dec = new TextDecoder();
+function lab() {
+  const m = mods[current] || mods.O3; const ex = m.ex;
+  $('addBtn').onclick = () => {
+    const a = +$('addA').value, b = +$('addB').value;
+    $('addOut').textContent = `instance.exports.add(${a}, ${b})  →  ${ex.add(a, b)}\n(a * 2 + b, computed by the C++ you saw on slide 7)`;
+  };
+  $('bigBtn').onclick = () => {
+    const r = ex.add64(2n ** 53n, 1n);
+    $('bigOut').textContent =
+      `JS:    2 ** 53 + 1          →  ${2 ** 53 + 1}   (lost: a double can't hold it)\n` +
+      `WASM:  add64(2n ** 53n, 1n) →  ${r}n  typeof ${typeof r}\n` +
+      `Try add64 with plain numbers and you get a TypeError: i64 only takes BigInt.`;
+  };
+  $('strBtn').onclick = () => {
+    const text = $('strIn').value;
+    const bytes = enc.encode(text);
+    const ptr = ex.scratch(), cap = ex.scratch_len() * 4;
+    const n = Math.min(bytes.length, cap);
+    const mem = new Uint8Array(ex.memory.buffer, ptr, n);
+    mem.set(bytes.subarray(0, n));
+    const before = [...mem.subarray(0, 12)].map(b => b.toString(16).padStart(2, '0')).join(' ');
+    const changed = ex.upcase(ptr, n);
+    const after = [...mem.subarray(0, 12)].map(b => b.toString(16).padStart(2, '0')).join(' ');
+    $('strOut').textContent =
+      `TextEncoder → ${n} bytes written at ptr ${ptr}\n` +
+      `memory[ptr..]: ${before} …\n` +
+      `upcase(${ptr}, ${n}) → ${changed} bytes changed\n` +
+      `memory[ptr..]: ${after} …\n` +
+      `TextDecoder ← "${dec.decode(mem)}"\n` +
+      `(bytes ≥ 0x80 untouched, so the UTF-8 for ¡ and é survives)`;
+  };
+  $('arrBtn').onclick = () => {
+    const nums = $('arrIn').value.split(/[,\s]+/).filter(Boolean).map(Number);
+    const ptr = ex.scratch();
+    const view = new Int32Array(ex.memory.buffer, ptr, nums.length);
+    view.set(nums);
+    $('arrOut').textContent = `Int32Array(memory.buffer, ${ptr}, ${nums.length}).set([${nums.join(', ')}])\nsum_i32(${ptr}, ${nums.length})  →  ${ex.sum_i32(ptr, nums.length)}`;
+  };
+  let oldView = null;
+  $('growBtn').onclick = () => {
+    const mem = ex.memory;
+    oldView = new Uint8Array(mem.buffer);
+    const beforeLen = oldView.length, beforePages = beforeLen / 65536;
+    const prev = mem.grow(1);
+    $('growOut').textContent =
+      `view = new Uint8Array(memory.buffer)   // length ${beforeLen.toLocaleString()} (${beforePages} pages)\n` +
+      `memory.grow(1)                         // returned ${prev}; buffer is now ${mem.buffer.byteLength.toLocaleString()} bytes\n` +
+      `view.length                            // ${oldView.length}  ← detached. The old ArrayBuffer is gone.\n` +
+      `view.buffer.byteLength                 // ${oldView.buffer.byteLength}`;
+  };
+  $('reviewBtn').onclick = () => {
+    const v = new Uint8Array(ex.memory.buffer);
+    $('growOut').textContent += `\nview = new Uint8Array(memory.buffer)   // length ${v.length.toLocaleString()} ← fine again. Re-create views after growing.`;
+  };
+  $('exportsOut').textContent = Object.entries(ex).map(([k, v]) =>
+    `${k.padEnd(12)} ${v instanceof WebAssembly.Memory ? `Memory (${v.buffer.byteLength / 65536} pages)` : typeof v === 'function' ? `function, ${v.length} param${v.length === 1 ? '' : 's'}` : typeof v}`).join('\n');
+}
+
+/* ------------------------------------------------------------------ fractal controls */
+cv.addEventListener('click', e => {
+  const rect = cv.getBoundingClientRect();
+  const px = (e.clientX - rect.left) / rect.width, py = (e.clientY - rect.top) / rect.height;
+  view.cx += ((px * 2) - 1) * view.scale;
+  view.cy += ((py * 2) - 1) * view.scale * (H / W);
+  view.scale *= 0.45;
+  draw();
+});
+$('zoomOut').onclick = () => { view.scale = Math.min(view.scale / 0.45, HOME.scale); draw(); };
+$('reset').onclick   = () => { view = { ...HOME }; $('iter').value = 250; $('iterVal').textContent = '250'; draw(); };
+$('surprise').onclick = () => { view = { ...SPOTS[Math.floor(Math.random() * SPOTS.length)] }; draw(); };
+$('iter').oninput = () => { $('iterVal').textContent = $('iter').value; draw(); };
+$('raceBtn').onclick = race;
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === '1') showTab('pipe'); else if (e.key === '2') showTab('race'); else if (e.key === '3') showTab('lab');
+  else if (e.key === 'r' || e.key === 'R') { showTab('race'); race(); }
+  else if (e.key === 's' || e.key === 'S') { showTab('race'); $('surprise').click(); }
+  else if (e.key === 'z' || e.key === 'Z') $('zoomOut').click();
+  else if (e.key === '0') $('reset').click();
+  else if (e.key === '+' || e.key === '=') pageZoom(0.1);
+  else if (e.key === '-') pageZoom(-0.1);
+});
+let zoomLevel = 1;
+function pageZoom(d) { zoomLevel = Math.min(2, Math.max(0.6, zoomLevel + d)); document.body.style.zoom = zoomLevel; }
+
+/* ------------------------------------------------------------------ boot */
+try {
+  data = await (await fetch('pipeline.json')).json();
+  $('compiler').textContent = data.compiler + ' · --target=wasm32 -nostdlib';
+  $('specimens').innerHTML = data.specimens.map(s => `<button data-id="${s.id}">${s.title}</button>`).join('');
+  document.querySelectorAll('#specimens button').forEach(b => b.onclick = () => showSpecimen(b.dataset.id));
+  showSpecimen(data.specimens[0].id);
+
+  const results = await Promise.allSettled(BUILD_IDS.map(loadModule));
+  results.forEach((r, i) => { if (r.status === 'fulfilled') mods[BUILD_IDS[i]] = r.value; else console.warn(BUILD_IDS[i], r.reason); });
+  const first = mods.O3 || Object.values(mods)[0];
+  W = first.W; H = first.H; cv.width = W; cv.height = H; jsPix = new Uint8ClampedArray(W * H * 4);
+  $('builds').innerHTML = ['js', ...BUILD_IDS].map(id =>
+    `<button data-id="${id}" class="${mods[id] || id === 'js' ? '' : 'na'}" ${mods[id] || id === 'js' ? '' : 'disabled title="not supported by this engine"'}>${BUILD_LABEL[id]}</button>`).join('');
+  document.querySelectorAll('#builds button').forEach(b => b.onclick = () => selectBuild(b.dataset.id));
+  selectBuild(mods.O3 ? 'O3' : Object.keys(mods)[0]);
+  lab();
+  const missing = BUILD_IDS.filter(id => !mods[id]);
+  if (missing.length) status('Could not load: ' + missing.join(', ') + ' (engine lacks the feature, or run ./build.sh).');
+} catch (e) {
+  status('⚠ Could not load the demo. Run ./build.sh and serve this folder over http. ' + e);
+}
 </script>
 </body>
 </html>

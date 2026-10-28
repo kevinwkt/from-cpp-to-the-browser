@@ -1,0 +1,376 @@
+{
+ "compiler": "Homebrew clang version 23.1.4",
+ "specimens": [
+  {
+   "id": "01-add",
+   "title": "The specimen: add()",
+   "blurb": "One line of C++. At -O0 every variable lives in memory and a*2 is a mul. At -O2 it is three instructions and a shift.",
+   "source": "extern \"C\" int add(int a, int b) {\n    return a * 2 + b;\n}",
+   "ir_O0": "define i32 @add(i32 %0, i32 %1) {\n  %3 = alloca i32, align 4\n  %4 = alloca i32, align 4\n  store i32 %0, ptr %3, align 4\n  store i32 %1, ptr %4, align 4\n  %5 = load i32, ptr %3, align 4\n  %6 = mul nsw i32 %5, 2\n  %7 = load i32, ptr %4, align 4\n  %8 = add nsw i32 %6, %7\n  ret i32 %8\n}",
+   "ir_O2": "define i32 @add(i32 %0, i32 %1) {\n  %3 = shl nsw i32 %0, 1\n  %4 = add nsw i32 %3, %1\n  ret i32 %4\n}",
+   "wat": "(module\n  (type (;0;) (func (param i32 i32) (result i32)))\n  (func $add (type 0) (param i32 i32) (result i32)\n    local.get 0\n    i32.const 1\n    i32.shl\n    local.get 1\n    i32.add)\n  (memory (;0;) 1)\n  (export \"memory\" (memory 0))\n  (export \"add\" (func 0))",
+   "counts": {
+    "ir_O0": 9,
+    "ir_O2": 3,
+    "wat": 5,
+    "bytes": 284
+   },
+   "sections": [
+    {
+     "name": "magic + version",
+     "id": null,
+     "offset": 0,
+     "length": 8,
+     "hex": "0061736d01000000"
+    },
+    {
+     "name": "type",
+     "id": 1,
+     "offset": 8,
+     "length": 9,
+     "hex": "01070160027f7f017f"
+    },
+    {
+     "name": "function",
+     "id": 3,
+     "offset": 17,
+     "length": 4,
+     "hex": "03020100"
+    },
+    {
+     "name": "memory",
+     "id": 5,
+     "offset": 21,
+     "length": 5,
+     "hex": "0503010001"
+    },
+    {
+     "name": "export",
+     "id": 7,
+     "offset": 26,
+     "length": 18,
+     "hex": "071002066d656d6f72790200036164640000"
+    },
+    {
+     "name": "code",
+     "id": 10,
+     "offset": 44,
+     "length": 14,
+     "hex": "0a0c010a00200041017420016a0b"
+    },
+    {
+     "name": "custom: producers",
+     "id": 0,
+     "offset": 58,
+     "length": 75,
+     "hex": "00490970726f64756365727302086c616e6775616765010e435f706c75735f706c75735f3134000c70726f6365737365642d6279010e486f6d656272657720636c616e670632332e312e34"
+    },
+    {
+     "name": "custom: target_features",
+     "id": 0,
+     "offset": 133,
+     "length": 151,
+     "hex": "0094010f7461726765745f6665617475726573082b0f6d757461626c652d676c6f62616c732b136e6f6e7472617070696e672d6670746f696e742b0b62756c6b2d6d656d6f72792b087369676e2d6578742b0f7265666572656e63652d74797065732b0a6d756c746976616c75652b0f62756c6b2d6d656d6f72792d6f70742b1663616c6c2d696e6469726563742d6f7665726c6f6e67"
+    }
+   ]
+  },
+  {
+   "id": "02-template",
+   "title": "A template that disappears",
+   "blurb": "Complex<T> with operator overloads, the fractal's inner loop. At -O0 you see calls to operator* and operator+. At -O2 they are gone: one loop of f64.mul and f64.add. \"Zero-cost abstraction\" is inlining plus SROA.",
+   "source": "template <typename T>\nstruct Complex {\n    T re, im;\n    Complex operator*(Complex o) const { return {re * o.re - im * o.im, re * o.im + im * o.re}; }\n    Complex operator+(Complex o) const { return {re + o.re, im + o.im}; }\n    T norm2() const { return re * re + im * im; }\n};\n\ntemplate <typename T>\nstatic inline int escape(Complex<T> c, int maxIter) {\n    Complex<T> z{0, 0};\n    int it = 0;\n    while (z.norm2() <= T(4) && it < maxIter) {\n        z = z * z + c;\n        ++it;\n    }\n    return it;\n}\n\nextern \"C\" int iterations(double re, double im, int maxIter) {\n    return escape(Complex<double>{re, im}, maxIter);\n}",
+   "ir_O0": "%struct.Complex = type { double, double }\ndefine i32 @iterations(double %0, double %1, i32 %2) {\n  %4 = alloca double, align 8\n  %5 = alloca double, align 8\n  %6 = alloca i32, align 4\n  %7 = alloca %struct.Complex, align 8\n  store double %0, ptr %4, align 8\n  store double %1, ptr %5, align 8\n  store i32 %2, ptr %6, align 4\n  %8 = getelementptr inbounds nuw %struct.Complex, ptr %7, i32 0, i32 0\n  %9 = load double, ptr %4, align 8\n  store double %9, ptr %8, align 8\n  %10 = getelementptr inbounds nuw %struct.Complex, ptr %7, i32 0, i32 1\n  %11 = load double, ptr %5, align 8\n  store double %11, ptr %10, align 8\n  %12 = load i32, ptr %6, align 4\n  %13 = call i32 @_ZL6escapeIdEi7ComplexIT_Ei(ptr byval(%struct.Complex) align 8 %7, i32 %12)\n  ret i32 %13\n}\ndefine internal i32 @_ZL6escapeIdEi7ComplexIT_Ei(ptr byval(%struct.Complex) align 8 %0, i32 %1) {\n  %3 = alloca i32, align 4\n  %4 = alloca %struct.Complex, align 8\n  %5 = alloca i32, align 4\n  %6 = alloca %struct.Complex, align 8\n  %7 = alloca %struct.Complex, align 8\n  %8 = alloca %struct.Complex, align 8\n  %9 = alloca %struct.Complex, align 8\n  store i32 %1, ptr %3, align 4\n  call void @llvm.memset.p0.i32(ptr %4, i8 0, i32 16, i1 false)\n  store i32 0, ptr %5, align 4\n  br label %10\n10:                                               ; preds = %19, %2\n  %11 = call double @_ZNK7ComplexIdE5norm2Ev(ptr align 8 %4)\n  %12 = fcmp ole double %11, 4.000000e+00\n  br i1 %12, label %13, label %17\n13:                                               ; preds = %10\n  %14 = load i32, ptr %5, align 4\n  %15 = load i32, ptr %3, align 4\n  %16 = icmp slt i32 %14, %15\n  br label %17\n17:                                               ; preds = %13, %10\n  %18 = phi i1 [ false, %10 ], [ %16, %13 ]\n  br i1 %18, label %19, label %22\n19:                                               ; preds = %17\n  call void @llvm.memcpy.p0.p0.i32(ptr %8, ptr %4, i32 16, i1 false)\n  call void @_ZNK7ComplexIdEmlES0_(ptr dead_on_unwind writable sret(%struct.Complex) align 8 %7, ptr align 8 %4, ptr byval(%struct.Complex) align 8 %8)\n  call void @llvm.memcpy.p0.p0.i32(ptr %9, ptr %0, i32 16, i1 false)\n  call void @_ZNK7ComplexIdEplES0_(ptr dead_on_unwind writable sret(%struct.Complex) align 8 %6, ptr align 8 %7, ptr byval(%struct.Complex) align 8 %9)\n  call void @llvm.memcpy.p0.p0.i32(ptr %4, ptr %6, i32 16, i1 false)\n  %20 = load i32, ptr %5, align 4\n  %21 = add nsw i32 %20, 1\n  store i32 %21, ptr %5, align 4\n  br label %10\n22:                                               ; preds = %17\n  %23 = load i32, ptr %5, align 4\n  ret i32 %23\n}\ndefine double @_ZNK7ComplexIdE5norm2Ev(ptr align 8 %0) {\n  %2 = alloca ptr, align 4\n  store ptr %0, ptr %2, align 4\n  %3 = load ptr, ptr %2, align 4\n  %4 = getelementptr inbounds nuw %struct.Complex, ptr %3, i32 0, i32 0\n  %5 = load double, ptr %4, align 8\n  %6 = getelementptr inbounds nuw %struct.Complex, ptr %3, i32 0, i32 0\n  %7 = load double, ptr %6, align 8\n  %8 = getelementptr inbounds nuw %struct.Complex, ptr %3, i32 0, i32 1\n  %9 = load double, ptr %8, align 8\n  %10 = getelementptr inbounds nuw %struct.Complex, ptr %3, i32 0, i32 1\n  %11 = load double, ptr %10, align 8\n  %12 = fmul double %9, %11\n  %13 = call double @llvm.fmuladd.f64(double %5, double %7, double %12)\n  ret double %13\n}\ndefine void @_ZNK7ComplexIdEmlES0_(ptr dead_on_unwind noalias writable sret(%struct.Complex) align 8 %0, ptr align 8 %1, ptr byval(%struct.Complex) align 8 %2) {\n  %4 = alloca ptr, align 4\n  store ptr %1, ptr %4, align 4\n  %5 = load ptr, ptr %4, align 4\n  %6 = getelementptr inbounds nuw %struct.Complex, ptr %0, i32 0, i32 0\n  %7 = getelementptr inbounds nuw %struct.Complex, ptr %5, i32 0, i32 0\n  %8 = load double, ptr %7, align 8\n  %9 = getelementptr inbounds nuw %struct.Complex, ptr %2, i32 0, i32 0\n  %10 = load double, ptr %9, align 8\n  %11 = getelementptr inbounds nuw %struct.Complex, ptr %5, i32 0, i32 1\n  %12 = load double, ptr %11, align 8\n  %13 = getelementptr inbounds nuw %struct.Complex, ptr %2, i32 0, i32 1\n  %14 = load double, ptr %13, align 8\n  %15 = fmul double %12, %14\n  %16 = fneg double %15\n  %17 = call double @llvm.fmuladd.f64(double %8, double %10, double %16)\n  store double %17, ptr %6, align 8\n  %18 = getelementptr inbounds nuw %struct.Complex, ptr %0, i32 0, i32 1\n  %19 = getelementptr inbounds nuw %struct.Complex, ptr %5, i32 0, i32 0\n  %20 = load double, ptr %19, align 8\n  %21 = getelementptr inbounds nuw %struct.Complex, ptr %2, i32 0, i32 1\n  %22 = load double, ptr %21, align 8\n  %23 = getelementptr inbounds nuw %struct.Complex, ptr %5, i32 0, i32 1\n  %24 = load double, ptr %23, align 8\n  %25 = getelementptr inbounds nuw %struct.Complex, ptr %2, i32 0, i32 0\n  %26 = load double, ptr %25, align 8\n  %27 = fmul double %24, %26\n  %28 = call double @llvm.fmuladd.f64(double %20, double %22, double %27)\n  store double %28, ptr %18, align 8\n  ret void\n}\ndefine void @_ZNK7ComplexIdEplES0_(ptr dead_on_unwind noalias writable sret(%struct.Complex) align 8 %0, ptr align 8 %1, ptr byval(%struct.Complex) align 8 %2) {\n  %4 = alloca ptr, align 4\n  store ptr %1, ptr %4, align 4\n  %5 = load ptr, ptr %4, align 4\n  %6 = getelementptr inbounds nuw %struct.Complex, ptr %0, i32 0, i32 0\n  %7 = getelementptr inbounds nuw %struct.Complex, ptr %5, i32 0, i32 0\n  %8 = load double, ptr %7, align 8\n  %9 = getelementptr inbounds nuw %struct.Complex, ptr %2, i32 0, i32 0\n  %10 = load double, ptr %9, align 8\n  %11 = fadd double %8, %10\n  store double %11, ptr %6, align 8\n  %12 = getelementptr inbounds nuw %struct.Complex, ptr %0, i32 0, i32 1\n  %13 = getelementptr inbounds nuw %struct.Complex, ptr %5, i32 0, i32 1\n  %14 = load double, ptr %13, align 8\n  %15 = getelementptr inbounds nuw %struct.Complex, ptr %2, i32 0, i32 1\n  %16 = load double, ptr %15, align 8\n  %17 = fadd double %14, %16\n  store double %17, ptr %12, align 8\n  ret void\n}",
+   "ir_O2": "define i32 @iterations(double %0, double %1, i32 %2) {\n  %4 = icmp sgt i32 %2, 0\n  br i1 %4, label %5, label %22\n5:                                                ; preds = %3, %5\n  %6 = phi i32 [ %16, %5 ], [ 0, %3 ]\n  %7 = phi double [ %14, %5 ], [ 0.000000e+00, %3 ]\n  %8 = phi double [ %15, %5 ], [ 0.000000e+00, %3 ]\n  %9 = fneg double %8\n  %10 = fmul double %8, %9\n  %11 = call double @llvm.fmuladd.f64(double %7, double %7, double %10)\n  %12 = fmul double %7, %8\n  %13 = call double @llvm.fmuladd.f64(double %7, double %8, double %12)\n  %14 = fadd double %0, %11\n  %15 = fadd double %1, %13\n  %16 = add nuw nsw i32 %6, 1\n  %17 = fmul double %15, %15\n  %18 = call double @llvm.fmuladd.f64(double %14, double %14, double %17)\n  %19 = fcmp ole double %18, 4.000000e+00\n  %20 = icmp slt i32 %16, %2\n  %21 = select i1 %19, i1 %20, i1 false\n  br i1 %21, label %5, label %22\n22:                                               ; preds = %5, %3\n  %23 = phi i32 [ 0, %3 ], [ %16, %5 ]\n  ret i32 %23\n}",
+   "wat": "(module\n  (type (;0;) (func (param f64 f64 i32) (result i32)))\n  (func $iterations (type 0) (param f64 f64 i32) (result i32)\n    (local f64 f64 f64 i32)\n    local.get 2\n    i32.const 0\n    i32.le_s\n    if  ;; label = @1\n      i32.const 0\n      return\n    end\n    loop  ;; label = @1\n      block  ;; label = @2\n        local.get 4\n        local.get 3\n        f64.mul\n        local.set 5\n        local.get 6\n        i32.const 1\n        i32.add\n        local.set 6\n        local.get 0\n        local.get 4\n        local.get 4\n        f64.mul\n        local.get 3\n        local.get 3\n        f64.mul\n        f64.sub\n        f64.add\n        local.tee 4\n        local.get 4\n        f64.mul\n        local.get 1\n        local.get 5\n        local.get 5\n        f64.add\n        f64.add\n        local.tee 3\n        local.get 3\n        f64.mul\n        f64.add\n        f64.const 0x1p+2 (;=4;)\n        f64.le\n        i32.eqz\n        br_if 0 (;@2;)\n        local.get 2\n        local.get 6\n        i32.gt_s\n        br_if 1 (;@1;)\n      end\n    end\n    local.get 6)\n  (memory (;0;) 1)\n  (export \"memory\" (memory 0))\n  (export \"iterations\" (func 0))",
+   "counts": {
+    "ir_O0": 108,
+    "ir_O2": 21,
+    "wat": 49,
+    "bytes": 374
+   },
+   "sections": [
+    {
+     "name": "magic + version",
+     "id": null,
+     "offset": 0,
+     "length": 8,
+     "hex": "0061736d01000000"
+    },
+    {
+     "name": "type",
+     "id": 1,
+     "offset": 8,
+     "length": 10,
+     "hex": "01080160037c7c7f017f"
+    },
+    {
+     "name": "function",
+     "id": 3,
+     "offset": 18,
+     "length": 4,
+     "hex": "03020100"
+    },
+    {
+     "name": "memory",
+     "id": 5,
+     "offset": 22,
+     "length": 5,
+     "hex": "0503010001"
+    },
+    {
+     "name": "export",
+     "id": 7,
+     "offset": 27,
+     "length": 25,
+     "hex": "071702066d656d6f727902000a697465726174696f6e730000"
+    },
+    {
+     "name": "code",
+     "id": 10,
+     "offset": 52,
+     "length": 96,
+     "hex": "0a5e015c02037c017f200241004c044041000f0b0340024020042003a22105200641016a2106200020042004a220032003a2a1a022042004a2200120052005a0a022032003a2a044000000000000104065450d00200220064a0d010b0b20060b"
+    },
+    {
+     "name": "custom: producers",
+     "id": 0,
+     "offset": 148,
+     "length": 75,
+     "hex": "00490970726f64756365727302086c616e6775616765010e435f706c75735f706c75735f3134000c70726f6365737365642d6279010e486f6d656272657720636c616e670632332e312e34"
+    },
+    {
+     "name": "custom: target_features",
+     "id": 0,
+     "offset": 223,
+     "length": 151,
+     "hex": "0094010f7461726765745f6665617475726573082b0f6d757461626c652d676c6f62616c732b136e6f6e7472617070696e672d6670746f696e742b0b62756c6b2d6d656d6f72792b087369676e2d6578742b0f7265666572656e63652d74797065732b0a6d756c746976616c75652b0f62756c6b2d6d656d6f72792d6f70742b1663616c6c2d696e6469726563742d6f7665726c6f6e67"
+    }
+   ]
+  },
+  {
+   "id": "03-constexpr",
+   "title": "Computed at build time",
+   "blurb": "The same colour, two ways. red_runtime() does the arithmetic every call. red() reads a table the compiler filled in: 768 bytes in the .wasm data section, no math left. Constant folding, taken to its limit.",
+   "source": "using u8 = unsigned char;\n\nstruct Palette { u8 rgb[256][3]; };\n\nconstexpr Palette makePalette() {\n    Palette p{};\n    for (int i = 0; i < 256; i++) {\n        double t = i / 255.0;\n        p.rgb[i][0] = (u8)(9.0  * (1 - t) * t * t * t * 255.0);\n        p.rgb[i][1] = (u8)(15.0 * (1 - t) * (1 - t) * t * t * 255.0);\n        p.rgb[i][2] = (u8)(8.5  * (1 - t) * (1 - t) * (1 - t) * t * 255.0);\n    }\n    return p;\n}\nstatic constexpr Palette PAL = makePalette();\n\nextern \"C\" int red(int i) {\n    return PAL.rgb[i & 255][0];\n}\n\nextern \"C\" int red_runtime(int i) {\n    double t = (i & 255) / 255.0;\n    return (u8)(9.0 * (1 - t) * t * t * t * 255.0);\n}",
+   "ir_O0": "%struct.Palette = type { [256 x [3 x i8]] }\n@_ZL3PAL = internal constant %struct.Palette { [256 x [3 x i8]] [[3 x i8] zeroinitializer, [3 x i8] c\"\\00\\00\\08\", [3 x i8] c\"\\00\\00\\10\", [3 x i8] c\"\\00\\00\\18\", [3 x i8] c\"\\00\\00 \", [3 x i8] c\"\\00\\01(\", [3 x i8] c\"\\00\\02/\", [3 x i8] c\"\\00\\026\", [3 x i8] c\"\\00\\03=\", [3 x i8] c\"\\00\\04D\", [3 x i8] c\"\\00\\05K\", [3 x i8] c\"\\00\\06Q\", [3 x i8] c\"\\00\\07X\", [3 x i8] c\"\\00\\08^\", [3 x i8] c\"\\00\\0Ad\", [3 x i8] c\"\\00\\0Bj\", [3 x i8] c\"\\00\\0Do\", [3 x i8] c\"\\00\\0Eu\", [3 x i8] c\"\\00\\10z\", [3 x i8] c\"\\00\\12\\80\", [3 x i8] c\"\\01\\13\\85\", [3 x i8] c\"\\01\\15\\89\", [3 x i8] c\"\\01\\17\\8E\", [3 x i8] c\"\\01\\19\\93\", [3 x i8] c\"\\01\\1B\\97\", [3 x i8] c\"\\01\\1D\\9B\", [3 x i8] c\"\\02 \\A0\", [3 x i8] c\"\\02\\22\\A4\", [3 x i8] c\"\\02$\\A7\", [3 x i8] c\"\\02&\\AB\", [3 x i8] c\"\\03)\\AF\", [3 x i8] c\"\\03+\\B2\", [3 x i8] c\"\\03.\\B5\", [3 x i8] c\"\\040\\B9\", [3 x i8] c\"\\043\\BC\", [3 x i8] c\"\\055\\BF\", [3 x i8] c\"\\058\\C1\", [3 x i8] c\"\\05:\\C4\", [3 x i8] c\"\\06=\\C7\", [3 x i8] c\"\\06@\\C9\", [3 x i8] c\"\\07B\\CB\", [3 x i8] c\"\\08E\\CD\", [3 x i8] c\"\\08H\\D0\", [3 x i8] c\"\\09K\\D2\", [3 x i8] c\"\\09M\\D3\", [3 x i8] c\"\\0AP\\D5\", [3 x i8] c\"\\0BS\\D7\", [3 x i8] c\"\\0BV\\D8\", [3 x i8] c\"\\0CY\\DA\", [3 x i8] c\"\\0D\\\\\\DB\", [3 x i8] c\"\\0D_\\DC\", [3 x i8] c\"\\0Ea\\DD\", [3 x i8] c\"\\0Fd\\DE\", [3 x i8] c\"\\10g\\DF\", [3 x i8] c\"\\11j\\E0\", [3 x i8] c\"\\12m\\E1\", [3 x i8] c\"\\12p\\E2\", [3 x i8] c\"\\13s\\E2\", [3 x i8] c\"\\14v\\E3\", [3 x i8] c\"\\15x\\E3\", [3 x i8] c\"\\16{\\E4\", [3 x i8] c\"\\17~\\E4\", [3 x i8] c\"\\18\\81\\E4\", [3 x i8] c\"\\1A\\84\\E4\", [3 x i8] c\"\\1B\\87\\E4\", [3 x i8] c\"\\1C\\89\\E4\", [3 x i8] c\"\\1D\\8C\\E4\", [3 x i8] c\"\\1E\\8F\\E4\", [3 x i8] c\"\\1F\\92\\E3\", [3 x i8] c\"!\\95\\E3\", [3 x i8] c\"\\22\\97\\E3\", [3 x i8] c\"#\\9A\\E2\", [3 x i8] c\"%\\9D\\E2\", [3 x i8] c\"&\\9F\\E1\", [3 x i8] c\"'\\A2\\E0\", [3 x i8] c\")\\A4\\E0\", [3 x i8] c\"*\\A7\\DF\", [3 x i8] c\",\\A9\\DE\", [3 x i8] c\"-\\AC\\DD\", [3 x i8] c\"/\\AE\\DC\", [3 x i8] c\"0\\B1\\DB\", [3 x i8] c\"2\\B3\\DA\", [3 x i8] c\"3\\B6\\D9\", [3 x i8] c\"5\\B8\\D8\", [3 x i8] c\"7\\BA\\D7\", [3 x i8] c\"8\\BC\\D6\", [3 x i8] c\":\\BF\\D4\", [3 x i8] c\"<\\C1\\D3\", [3 x i8] c\"=\\C3\\D2\", [3 x i8] c\"?\\C5\\D0\", [3 x i8] c\"A\\C7\\CF\", [3 x i8] c\"C\\C9\\CD\", [3 x i8] c\"D\\CB\\CC\", [3 x i8] c\"F\\CD\\CA\", [3 x i8] c\"H\\CF\\C9\", [3 x i8] c\"J\\D1\\C7\", [3 x i8] c\"L\\D2\\C5\", [3 x i8] c\"N\\D4\\C4\", [3 x i8] c\"P\\D6\\C2\", [3 x i8] c\"R\\D7\\C0\", [3 x i8] c\"T\\D9\\BE\", [3 x i8] c\"V\\DA\\BD\", [3 x i8] c\"X\\DC\\BB\", [3 x i8] c\"Z\\DD\\B9\", [3 x i8] c\"\\\\\\DF\\B7\", [3 x i8] c\"^\\E0\\B5\", [3 x i8] c\"`\\E1\\B3\", [3 x i8] c\"b\\E2\\B1\", [3 x i8] c\"d\\E4\\AF\", [3 x i8] c\"f\\E5\\AD\", [3 x i8] c\"h\\E6\\AB\", [3 x i8] c\"j\\E7\\A9\", [3 x i8] c\"m\\E8\\A7\", [3 x i8] c\"o\\E8\\A5\", [3 x i8] c\"q\\E9\\A3\", [3 x i8] c\"s\\EA\\A1\", [3 x i8] c\"u\\EB\\9F\", [3 x i8] c\"w\\EB\\9D\", [3 x i8] c\"z\\EC\\9B\", [3 x i8] c\"|\\EC\\99\", [3 x i8] c\"~\\ED\\97\", [3 x i8] c\"\\80\\ED\\95\", [3 x i8] c\"\\83\\EE\\93\", [3 x i8] c\"\\85\\EE\\91\", [3 x i8] c\"\\87\\EE\\8E\", [3 x i8] c\"\\89\\EE\\8C\", [3 x i8] c\"\\8C\\EE\\8A\", [3 x i8] c\"\\8E\\EF\\88\", [3 x i8] c\"\\90\\EF\\86\", [3 x i8] c\"\\92\\EE\\84\", [3 x i8] c\"\\95\\EE\\82\", [3 x i8] c\"\\97\\EE\\80\", [3 x i8] c\"\\99\\EE}\", [3 x i8] c\"\\9B\\EE{\", [3 x i8] c\"\\9E\\EDy\", [3 x i8] c\"\\A0\\EDw\", [3 x i8] c\"\\A2\\ECu\", [3 x i8] c\"\\A4\\ECs\", [3 x i8] c\"\\A6\\EBq\", [3 x i8] c\"\\A9\\EBo\", [3 x i8] c\"\\AB\\EAm\", [3 x i8] c\"\\AD\\E9k\", [3 x i8] c\"\\AF\\E8i\", [3 x i8] c\"\\B1\\E8f\", [3 x i8] c\"\\B3\\E7d\", [3 x i8] c\"\\B6\\E6b\", [3 x i8] c\"\\B8\\E5`\", [3 x i8] c\"\\BA\\E4^\", [3 x i8] c\"\\BC\\E2\\\\\", [3 x i8] c\"\\BE\\E1Z\", [3 x i8] c\"\\C0\\E0Y\", [3 x i8] c\"\\C2\\DFW\", [3 x i8] c\"\\C4\\DDU\", [3 x i8] c\"\\C6\\DCS\", [3 x i8] c\"\\C8\\DAQ\", [3 x i8] c\"\\CA\\D9O\", [3 x i8] c\"\\CC\\D7M\", [3 x i8] c\"\\CD\\D6K\", [3 x i8] c\"\\CF\\D4I\", [3 x i8] c\"\\D1\\D2H\", [3 x i8] c\"\\D3\\D1F\", [3 x i8] c\"\\D4\\CFD\", [3 x i8] c\"\\D6\\CDB\", [3 x i8] c\"\\D8\\CBA\", [3 x i8] c\"\\D9\\C9?\", [3 x i8] c\"\\DB\\C7=\", [3 x i8] c\"\\DC\\C5;\", [3 x i8] c\"\\DE\\C3:\", [3 x i8] c\"\\DF\\C18\", [3 x i8] c\"\\E1\\BF7\", [3 x i8] c\"\\E2\\BC5\", [3 x i8] c\"\\E3\\BA3\", [3 x i8] c\"\\E5\\B82\", [3 x i8] c\"\\E6\\B60\", [3 x i8] c\"\\E7\\B3/\", [3 x i8] c\"\\E8\\B1-\", [3 x i8] c\"\\E9\\AE,\", [3 x i8] c\"\\EA\\AC+\", [3 x i8] c\"\\EB\\A9)\", [3 x i8] c\"\\EC\\A7(\", [3 x i8] c\"\\ED\\A4&\", [3 x i8] c\"\\EE\\A2%\", [3 x i8] c\"\\EE\\9F$\", [3 x i8] c\"\\EF\\9D#\", [3 x i8] c\"\\F0\\9A!\", [3 x i8] c\"\\F0\\97 \", [3 x i8] c\"\\F0\\95\\1F\", [3 x i8] c\"\\F1\\92\\1E\", [3 x i8] c\"\\F1\\8F\\1C\", [3 x i8] c\"\\F1\\8C\\1B\", [3 x i8] c\"\\F1\\89\\1A\", [3 x i8] c\"\\F2\\87\\19\", [3 x i8] c\"\\F2\\84\\18\", [3 x i8] c\"\\F1\\81\\17\", [3 x i8] c\"\\F1~\\16\", [3 x i8] c\"\\F1{\\15\", [3 x i8] c\"\\F1x\\14\", [3 x i8] c\"\\F0v\\13\", [3 x i8] c\"\\F0s\\12\", [3 x i8] c\"\\EFp\\11\", [3 x i8] c\"\\EEm\\11\", [3 x i8] c\"\\EEj\\10\", [3 x i8] c\"\\EDg\\0F\", [3 x i8] c\"\\ECd\\0E\", [3 x i8] c\"\\EBa\\0D\", [3 x i8] c\"\\E9_\\0D\", [3 x i8] c\"\\E8\\\\\\0C\", [3 x i8] c\"\\E7Y\\0B\", [3 x i8] c\"\\E5V\\0B\", [3 x i8] c\"\\E3S\\0A\", [3 x i8] c\"\\E2P\\09\", [3 x i8] c\"\\E0M\\09\", [3 x i8] c\"\\DEK\\08\", [3 x i8] c\"\\DCH\\08\", [3 x i8] c\"\\DAE\\07\", [3 x i8] c\"\\D7B\\07\", [3 x i8] c\"\\D5@\\06\", [3 x i8] c\"\\D2=\\06\", [3 x i8] c\"\\D0:\\05\", [3 x i8] c\"\\CD8\\05\", [3 x i8] c\"\\CA5\\04\", [3 x i8] c\"\\C73\\04\", [3 x i8] c\"\\C30\\04\", [3 x i8] c\"\\C0.\\03\", [3 x i8] c\"\\BD+\\03\", [3 x i8] c\"\\B9)\\03\", [3 x i8] c\"\\B5&\\02\", [3 x i8] c\"\\B1$\\02\", [3 x i8] c\"\\AD\\22\\02\", [3 x i8] c\"\\A9 \\02\", [3 x i8] c\"\\A5\\1D\\01\", [3 x i8] c\"\\A0\\1B\\01\", [3 x i8] c\"\\9B\\19\\01\", [3 x i8] c\"\\97\\17\\01\", [3 x i8] c\"\\92\\15\\01\", [3 x i8] c\"\\8C\\13\\00\", [3 x i8] c\"\\87\\12\\00\", [3 x i8] c\"\\82\\10\\00\", [3 x i8] c\"|\\0E\\00\", [3 x i8] c\"v\\0D\\00\", [3 x i8] c\"p\\0B\\00\", [3 x i8] c\"j\\0A\\00\", [3 x i8] c\"d\\08\\00\", [3 x i8] c\"]\\07\\00\", [3 x i8] c\"V\\06\\00\", [3 x i8] c\"O\\05\\00\", [3 x i8] c\"H\\04\\00\", [3 x i8] c\"A\\03\\00\", [3 x i8] c\"9\\02\\00\", [3 x i8] c\"2\\02\\00\", [3 x i8] c\"*\\01\\00\", [3 x i8] c\"\\22\\00\\00\", [3 x i8] c\"\\1A\\00\\00\", [3 x i8] c\"\\11\\00\\00\", [3 x i8] c\"\\08\\00\\00\", [3 x i8] zeroinitializer] }, align 1\ndefine i32 @red(i32 %0) {\n  %2 = alloca i32, align 4\n  store i32 %0, ptr %2, align 4\n  %3 = load i32, ptr %2, align 4\n  %4 = and i32 %3, 255\n  %5 = getelementptr inbounds [256 x [3 x i8]], ptr @_ZL3PAL, i32 0, i32 %4\n  %6 = getelementptr inbounds [3 x i8], ptr %5, i32 0, i32 0\n  %7 = load i8, ptr %6, align 1\n  %8 = zext i8 %7 to i32\n  ret i32 %8\n}\ndefine i32 @red_runtime(i32 %0) {\n  %2 = alloca i32, align 4\n  %3 = alloca double, align 8\n  store i32 %0, ptr %2, align 4\n  %4 = load i32, ptr %2, align 4\n  %5 = and i32 %4, 255\n  %6 = sitofp i32 %5 to double\n  %7 = fdiv double %6, 2.550000e+02\n  store double %7, ptr %3, align 8\n  %8 = load double, ptr %3, align 8\n  %9 = fsub double 1.000000e+00, %8\n  %10 = fmul double 9.000000e+00, %9\n  %11 = load double, ptr %3, align 8\n  %12 = fmul double %10, %11\n  %13 = load double, ptr %3, align 8\n  %14 = fmul double %12, %13\n  %15 = load double, ptr %3, align 8\n  %16 = fmul double %14, %15\n  %17 = fmul double %16, 2.550000e+02\n  %18 = fptoui double %17 to i8\n  %19 = zext i8 %18 to i32\n  ret i32 %19\n}",
+   "ir_O2": "%struct.Palette = type { [256 x [3 x i8]] }\n@_ZL3PAL = internal constant %struct.Palette { [256 x [3 x i8]] [[3 x i8] zeroinitializer, [3 x i8] c\"\\00\\00\\08\", [3 x i8] c\"\\00\\00\\10\", [3 x i8] c\"\\00\\00\\18\", [3 x i8] c\"\\00\\00 \", [3 x i8] c\"\\00\\01(\", [3 x i8] c\"\\00\\02/\", [3 x i8] c\"\\00\\026\", [3 x i8] c\"\\00\\03=\", [3 x i8] c\"\\00\\04D\", [3 x i8] c\"\\00\\05K\", [3 x i8] c\"\\00\\06Q\", [3 x i8] c\"\\00\\07X\", [3 x i8] c\"\\00\\08^\", [3 x i8] c\"\\00\\0Ad\", [3 x i8] c\"\\00\\0Bj\", [3 x i8] c\"\\00\\0Do\", [3 x i8] c\"\\00\\0Eu\", [3 x i8] c\"\\00\\10z\", [3 x i8] c\"\\00\\12\\80\", [3 x i8] c\"\\01\\13\\85\", [3 x i8] c\"\\01\\15\\89\", [3 x i8] c\"\\01\\17\\8E\", [3 x i8] c\"\\01\\19\\93\", [3 x i8] c\"\\01\\1B\\97\", [3 x i8] c\"\\01\\1D\\9B\", [3 x i8] c\"\\02 \\A0\", [3 x i8] c\"\\02\\22\\A4\", [3 x i8] c\"\\02$\\A7\", [3 x i8] c\"\\02&\\AB\", [3 x i8] c\"\\03)\\AF\", [3 x i8] c\"\\03+\\B2\", [3 x i8] c\"\\03.\\B5\", [3 x i8] c\"\\040\\B9\", [3 x i8] c\"\\043\\BC\", [3 x i8] c\"\\055\\BF\", [3 x i8] c\"\\058\\C1\", [3 x i8] c\"\\05:\\C4\", [3 x i8] c\"\\06=\\C7\", [3 x i8] c\"\\06@\\C9\", [3 x i8] c\"\\07B\\CB\", [3 x i8] c\"\\08E\\CD\", [3 x i8] c\"\\08H\\D0\", [3 x i8] c\"\\09K\\D2\", [3 x i8] c\"\\09M\\D3\", [3 x i8] c\"\\0AP\\D5\", [3 x i8] c\"\\0BS\\D7\", [3 x i8] c\"\\0BV\\D8\", [3 x i8] c\"\\0CY\\DA\", [3 x i8] c\"\\0D\\\\\\DB\", [3 x i8] c\"\\0D_\\DC\", [3 x i8] c\"\\0Ea\\DD\", [3 x i8] c\"\\0Fd\\DE\", [3 x i8] c\"\\10g\\DF\", [3 x i8] c\"\\11j\\E0\", [3 x i8] c\"\\12m\\E1\", [3 x i8] c\"\\12p\\E2\", [3 x i8] c\"\\13s\\E2\", [3 x i8] c\"\\14v\\E3\", [3 x i8] c\"\\15x\\E3\", [3 x i8] c\"\\16{\\E4\", [3 x i8] c\"\\17~\\E4\", [3 x i8] c\"\\18\\81\\E4\", [3 x i8] c\"\\1A\\84\\E4\", [3 x i8] c\"\\1B\\87\\E4\", [3 x i8] c\"\\1C\\89\\E4\", [3 x i8] c\"\\1D\\8C\\E4\", [3 x i8] c\"\\1E\\8F\\E4\", [3 x i8] c\"\\1F\\92\\E3\", [3 x i8] c\"!\\95\\E3\", [3 x i8] c\"\\22\\97\\E3\", [3 x i8] c\"#\\9A\\E2\", [3 x i8] c\"%\\9D\\E2\", [3 x i8] c\"&\\9F\\E1\", [3 x i8] c\"'\\A2\\E0\", [3 x i8] c\")\\A4\\E0\", [3 x i8] c\"*\\A7\\DF\", [3 x i8] c\",\\A9\\DE\", [3 x i8] c\"-\\AC\\DD\", [3 x i8] c\"/\\AE\\DC\", [3 x i8] c\"0\\B1\\DB\", [3 x i8] c\"2\\B3\\DA\", [3 x i8] c\"3\\B6\\D9\", [3 x i8] c\"5\\B8\\D8\", [3 x i8] c\"7\\BA\\D7\", [3 x i8] c\"8\\BC\\D6\", [3 x i8] c\":\\BF\\D4\", [3 x i8] c\"<\\C1\\D3\", [3 x i8] c\"=\\C3\\D2\", [3 x i8] c\"?\\C5\\D0\", [3 x i8] c\"A\\C7\\CF\", [3 x i8] c\"C\\C9\\CD\", [3 x i8] c\"D\\CB\\CC\", [3 x i8] c\"F\\CD\\CA\", [3 x i8] c\"H\\CF\\C9\", [3 x i8] c\"J\\D1\\C7\", [3 x i8] c\"L\\D2\\C5\", [3 x i8] c\"N\\D4\\C4\", [3 x i8] c\"P\\D6\\C2\", [3 x i8] c\"R\\D7\\C0\", [3 x i8] c\"T\\D9\\BE\", [3 x i8] c\"V\\DA\\BD\", [3 x i8] c\"X\\DC\\BB\", [3 x i8] c\"Z\\DD\\B9\", [3 x i8] c\"\\\\\\DF\\B7\", [3 x i8] c\"^\\E0\\B5\", [3 x i8] c\"`\\E1\\B3\", [3 x i8] c\"b\\E2\\B1\", [3 x i8] c\"d\\E4\\AF\", [3 x i8] c\"f\\E5\\AD\", [3 x i8] c\"h\\E6\\AB\", [3 x i8] c\"j\\E7\\A9\", [3 x i8] c\"m\\E8\\A7\", [3 x i8] c\"o\\E8\\A5\", [3 x i8] c\"q\\E9\\A3\", [3 x i8] c\"s\\EA\\A1\", [3 x i8] c\"u\\EB\\9F\", [3 x i8] c\"w\\EB\\9D\", [3 x i8] c\"z\\EC\\9B\", [3 x i8] c\"|\\EC\\99\", [3 x i8] c\"~\\ED\\97\", [3 x i8] c\"\\80\\ED\\95\", [3 x i8] c\"\\83\\EE\\93\", [3 x i8] c\"\\85\\EE\\91\", [3 x i8] c\"\\87\\EE\\8E\", [3 x i8] c\"\\89\\EE\\8C\", [3 x i8] c\"\\8C\\EE\\8A\", [3 x i8] c\"\\8E\\EF\\88\", [3 x i8] c\"\\90\\EF\\86\", [3 x i8] c\"\\92\\EE\\84\", [3 x i8] c\"\\95\\EE\\82\", [3 x i8] c\"\\97\\EE\\80\", [3 x i8] c\"\\99\\EE}\", [3 x i8] c\"\\9B\\EE{\", [3 x i8] c\"\\9E\\EDy\", [3 x i8] c\"\\A0\\EDw\", [3 x i8] c\"\\A2\\ECu\", [3 x i8] c\"\\A4\\ECs\", [3 x i8] c\"\\A6\\EBq\", [3 x i8] c\"\\A9\\EBo\", [3 x i8] c\"\\AB\\EAm\", [3 x i8] c\"\\AD\\E9k\", [3 x i8] c\"\\AF\\E8i\", [3 x i8] c\"\\B1\\E8f\", [3 x i8] c\"\\B3\\E7d\", [3 x i8] c\"\\B6\\E6b\", [3 x i8] c\"\\B8\\E5`\", [3 x i8] c\"\\BA\\E4^\", [3 x i8] c\"\\BC\\E2\\\\\", [3 x i8] c\"\\BE\\E1Z\", [3 x i8] c\"\\C0\\E0Y\", [3 x i8] c\"\\C2\\DFW\", [3 x i8] c\"\\C4\\DDU\", [3 x i8] c\"\\C6\\DCS\", [3 x i8] c\"\\C8\\DAQ\", [3 x i8] c\"\\CA\\D9O\", [3 x i8] c\"\\CC\\D7M\", [3 x i8] c\"\\CD\\D6K\", [3 x i8] c\"\\CF\\D4I\", [3 x i8] c\"\\D1\\D2H\", [3 x i8] c\"\\D3\\D1F\", [3 x i8] c\"\\D4\\CFD\", [3 x i8] c\"\\D6\\CDB\", [3 x i8] c\"\\D8\\CBA\", [3 x i8] c\"\\D9\\C9?\", [3 x i8] c\"\\DB\\C7=\", [3 x i8] c\"\\DC\\C5;\", [3 x i8] c\"\\DE\\C3:\", [3 x i8] c\"\\DF\\C18\", [3 x i8] c\"\\E1\\BF7\", [3 x i8] c\"\\E2\\BC5\", [3 x i8] c\"\\E3\\BA3\", [3 x i8] c\"\\E5\\B82\", [3 x i8] c\"\\E6\\B60\", [3 x i8] c\"\\E7\\B3/\", [3 x i8] c\"\\E8\\B1-\", [3 x i8] c\"\\E9\\AE,\", [3 x i8] c\"\\EA\\AC+\", [3 x i8] c\"\\EB\\A9)\", [3 x i8] c\"\\EC\\A7(\", [3 x i8] c\"\\ED\\A4&\", [3 x i8] c\"\\EE\\A2%\", [3 x i8] c\"\\EE\\9F$\", [3 x i8] c\"\\EF\\9D#\", [3 x i8] c\"\\F0\\9A!\", [3 x i8] c\"\\F0\\97 \", [3 x i8] c\"\\F0\\95\\1F\", [3 x i8] c\"\\F1\\92\\1E\", [3 x i8] c\"\\F1\\8F\\1C\", [3 x i8] c\"\\F1\\8C\\1B\", [3 x i8] c\"\\F1\\89\\1A\", [3 x i8] c\"\\F2\\87\\19\", [3 x i8] c\"\\F2\\84\\18\", [3 x i8] c\"\\F1\\81\\17\", [3 x i8] c\"\\F1~\\16\", [3 x i8] c\"\\F1{\\15\", [3 x i8] c\"\\F1x\\14\", [3 x i8] c\"\\F0v\\13\", [3 x i8] c\"\\F0s\\12\", [3 x i8] c\"\\EFp\\11\", [3 x i8] c\"\\EEm\\11\", [3 x i8] c\"\\EEj\\10\", [3 x i8] c\"\\EDg\\0F\", [3 x i8] c\"\\ECd\\0E\", [3 x i8] c\"\\EBa\\0D\", [3 x i8] c\"\\E9_\\0D\", [3 x i8] c\"\\E8\\\\\\0C\", [3 x i8] c\"\\E7Y\\0B\", [3 x i8] c\"\\E5V\\0B\", [3 x i8] c\"\\E3S\\0A\", [3 x i8] c\"\\E2P\\09\", [3 x i8] c\"\\E0M\\09\", [3 x i8] c\"\\DEK\\08\", [3 x i8] c\"\\DCH\\08\", [3 x i8] c\"\\DAE\\07\", [3 x i8] c\"\\D7B\\07\", [3 x i8] c\"\\D5@\\06\", [3 x i8] c\"\\D2=\\06\", [3 x i8] c\"\\D0:\\05\", [3 x i8] c\"\\CD8\\05\", [3 x i8] c\"\\CA5\\04\", [3 x i8] c\"\\C73\\04\", [3 x i8] c\"\\C30\\04\", [3 x i8] c\"\\C0.\\03\", [3 x i8] c\"\\BD+\\03\", [3 x i8] c\"\\B9)\\03\", [3 x i8] c\"\\B5&\\02\", [3 x i8] c\"\\B1$\\02\", [3 x i8] c\"\\AD\\22\\02\", [3 x i8] c\"\\A9 \\02\", [3 x i8] c\"\\A5\\1D\\01\", [3 x i8] c\"\\A0\\1B\\01\", [3 x i8] c\"\\9B\\19\\01\", [3 x i8] c\"\\97\\17\\01\", [3 x i8] c\"\\92\\15\\01\", [3 x i8] c\"\\8C\\13\\00\", [3 x i8] c\"\\87\\12\\00\", [3 x i8] c\"\\82\\10\\00\", [3 x i8] c\"|\\0E\\00\", [3 x i8] c\"v\\0D\\00\", [3 x i8] c\"p\\0B\\00\", [3 x i8] c\"j\\0A\\00\", [3 x i8] c\"d\\08\\00\", [3 x i8] c\"]\\07\\00\", [3 x i8] c\"V\\06\\00\", [3 x i8] c\"O\\05\\00\", [3 x i8] c\"H\\04\\00\", [3 x i8] c\"A\\03\\00\", [3 x i8] c\"9\\02\\00\", [3 x i8] c\"2\\02\\00\", [3 x i8] c\"*\\01\\00\", [3 x i8] c\"\\22\\00\\00\", [3 x i8] c\"\\1A\\00\\00\", [3 x i8] c\"\\11\\00\\00\", [3 x i8] c\"\\08\\00\\00\", [3 x i8] zeroinitializer] }, align 1\ndefine range(i32 0, 256) i32 @red(i32 %0) {\n  %2 = and i32 %0, 255\n  %3 = getelementptr inbounds nuw [3 x i8], ptr @_ZL3PAL, i32 %2\n  %4 = load i8, ptr %3, align 1\n  %5 = zext i8 %4 to i32\n  ret i32 %5\n}\ndefine range(i32 0, 256) i32 @red_runtime(i32 %0) {\n  %2 = and i32 %0, 255\n  %3 = uitofp nneg i32 %2 to double\n  %4 = fdiv double %3, 2.550000e+02\n  %5 = fsub nnan double 1.000000e+00, %4\n  %6 = fmul nnan double %5, 9.000000e+00\n  %7 = fmul double %4, %6\n  %8 = fmul double %4, %7\n  %9 = fmul double %4, %8\n  %10 = fmul double %9, 2.550000e+02\n  %11 = fptoui double %10 to i8\n  %12 = zext i8 %11 to i32\n  ret i32 %12\n}",
+   "wat": "(module\n  (type (;0;) (func (param i32) (result i32)))\n  (func $red (type 0) (param i32) (result i32)\n    local.get 0\n    i32.const 255\n    i32.and\n    i32.const 3\n    i32.mul\n    i32.load8_u offset=65536)\n  (func $red_runtime (type 0) (param i32) (result i32)\n    (local f64)\n    local.get 0\n    i32.const 255\n    i32.and\n    f64.convert_i32_u\n    f64.const 0x1.fep+7 (;=255;)\n    f64.div\n    local.tee 1\n    local.get 1\n    local.get 1\n    f64.const 0x1p+0 (;=1;)\n    local.get 1\n    f64.sub\n    f64.const 0x1.2p+3 (;=9;)\n    f64.mul\n    f64.mul\n    f64.mul\n    f64.mul\n    f64.const 0x1.fep+7 (;=255;)\n    f64.mul\n    i32.trunc_sat_f64_u)\n  (memory (;0;) 2)\n  (export \"memory\" (memory 0))\n  (export \"red\" (func 0))\n  (export \"red_runtime\" (func 1))\n  (data (;0;) (i32.const 65541) \"\\08\\00\\00\\10\\00\\00\\18\\00\\00 \\00\\01(\\00\\02/\\00\\026\\00\\03=\\00\\04D\\00\\05K\\00\\06Q\\00\\07X\\00\\08^\\00\\0ad\\00\\0bj\\00\\0do\\00\\0eu\\00\\10z\\00\\12\\80\\01\\13\\85\\01\\15\\89\\01\\17\\8e\\01\\19\\93\\01\\1b\\97\\01\\1d\\9b\\02 \\a0\\02\\22\\a4\\02$\\a7\\02&\\ab\\03)\\af\\03+\\b2\\03.\\b5\\040\\b9\\043\\bc\\055\\bf\\058\\c1\\05:\\c4\\06=\\c7\\06@\\c9\\07B\\cb\\08E\\cd\\08H\\d0\\09K\\d2\\09M\\d3\\0aP\\d5\\0bS\\d7\\0bV\\d8\\0cY\\da\\0d\\5c\\db\\0d_\\dc\\0ea\\dd\\0fd\\de\\10g\\df\\11j\\e0\\12m\\e1\\12p\\e2\\13s\\e2\\14v\\e3\\15x\\e3\\16{\\e4\\17~\\e4\\18\\81\\e4\\1a\\84\\e4\\1b\\87\\e4\\1c\\89\\e4\\1d\\8c\\e4\\1e\\8f\\e4\\1f\\92\\e3!\\95\\e3\\22\\97\\e3#\\9a\\e2%\\9d\\e2&\\9f\\e1'\\a2\\e0)\\a4\\e0*\\a7\\df,\\a9\\de-\\ac\\dd/\\ae\\dc0\\b1\\db2\\b3\\da3\\b6\\d95\\b8\\d87\\ba\\d78\\bc\\d6:\\bf\\d4<\\c1\\d3=\\c3\\d2?\\c5\\d0A\\c7\\cfC\\c9\\cdD\\cb\\ccF\\cd\\caH\\cf\\c9J\\d1\\c7L\\d2\\c5N\\d4\\c4P\\d6\\c2R\\d7\\c0T\\d9\\beV\\da\\bdX\\dc\\bbZ\\dd\\b9\\5c\\df\\b7^\\e0\\b5`\\e1\\b3b\\e2\\b1d\\e4\\aff\\e5\\adh\\e6\\abj\\e7\\a9m\\e8\\a7o\\e8\\a5q\\e9\\a3s\\ea\\a1u\\eb\\9fw\\eb\\9dz\\ec\\9b|\\ec\\99~\\ed\\97\\80\\ed\\95\\83\\ee\\93\\85\\ee\\91\\87\\ee\\8e\\89\\ee\\8c\\8c\\ee\\8a\\8e\\ef\\88\\90\\ef\\86\\92\\ee\\84\\95\\ee\\82\\97\\ee\\80\\99\\ee}\\9b\\ee{\\9e\\edy\\a0\\edw\\a2\\ecu\\a4\\ecs\\a6\\ebq\\a9\\ebo\\ab\\eam\\ad\\e9k\\af\\e8i\\b1\\e8f\\b3\\e7d\\b6\\e6b\\b8\\e5`\\ba\\e4^\\bc\\e2\\5c\\be\\e1Z\\c0\\e0Y\\c2\\dfW\\c4\\ddU\\c6\\dcS\\c8\\daQ\\ca\\d9O\\cc\\d7M\\cd\\d6K\\cf\\d4I\\d1\\d2H\\d3\\d1F\\d4\\cfD\\d6\\cdB\\d8\\cbA\\d9\\c9?\\db\\c7=\\dc\\c5;\\de\\c3:\\df\\c18\\e1\\bf7\\e2\\bc5\\e3\\ba3\\e5\\b82\\e6\\b60\\e7\\b3/\\e8\\b1-\\e9\\ae,\\ea\\ac+\\eb\\a9)\\ec\\a7(\\ed\\a4&\\ee\\a2%\\ee\\9f$\\ef\\9d#\\f0\\9a!\\f0\\97 \\f0\\95\\1f\\f1\\92\\1e\\f1\\8f\\1c\\f1\\8c\\1b\\f1\\89\\1a\\f2\\87\\19\\f2\\84\\18\\f1\\81\\17\\f1~\\16\\f1{\\15\\f1x\\14\\f0v\\13\\f0s\\12\\efp\\11\\eem\\11\\eej\\10\\edg\\0f\\ecd\\0e\\eba\\0d\\e9_\\0d\\e8\\5c\\0c\\e7Y\\0b\\e5V\\0b\\e3S\\0a\\e2P\\09\\e0M\\09\\deK\\08\\dcH\\08\\daE\\07\\d7B\\07\\d5@\\06\\d2=\\06\\d0:\\05\\cd8\\05\\ca5\\04\\c73\\04\\c30\\04\\c0.\\03\\bd+\\03\\b9)\\03\\b5&\\02\\b1$\\02\\ad\\22\\02\\a9 \\02\\a5\\1d\\01\\a0\\1b\\01\\9b\\19\\01\\97\\17\\01\\92\\15\\01\\8c\\13\\00\\87\\12\\00\\82\\10\\00|\\0e\\00v\\0d\\00p\\0b\\00j\\0a\\00d\\08\\00]\\07\\00V\\06\\00O\\05\\00H\\04\\00A\\03\\009\\02\\002\\02\\00*\\01\\00\\22\\00\\00\\1a\\00\\00\\11\\00\\00\\08\")",
+   "counts": {
+    "ir_O0": 30,
+    "ir_O2": 17,
+    "wat": 26,
+    "bytes": 1142
+   },
+   "sections": [
+    {
+     "name": "magic + version",
+     "id": null,
+     "offset": 0,
+     "length": 8,
+     "hex": "0061736d01000000"
+    },
+    {
+     "name": "type",
+     "id": 1,
+     "offset": 8,
+     "length": 8,
+     "hex": "01060160017f017f"
+    },
+    {
+     "name": "function",
+     "id": 3,
+     "offset": 16,
+     "length": 5,
+     "hex": "0303020000"
+    },
+    {
+     "name": "memory",
+     "id": 5,
+     "offset": 21,
+     "length": 5,
+     "hex": "0503010002"
+    },
+    {
+     "name": "export",
+     "id": 7,
+     "offset": 26,
+     "length": 32,
+     "hex": "071e03066d656d6f727902000372656400000b7265645f72756e74696d650001"
+    },
+    {
+     "name": "datacount",
+     "id": 12,
+     "offset": 58,
+     "length": 3,
+     "hex": "0c0101"
+    },
+    {
+     "name": "code",
+     "id": 10,
+     "offset": 61,
+     "length": 85,
+     "hex": "0a53021000200041ff017141036c2d008080040b4001017c200041ff0171b8440000000000e06f40a322012001200144000000000000f03f2001a1440000000000002240a2a2a2a2440000000000e06f40a2fc030b"
+    },
+    {
+     "name": "data",
+     "id": 11,
+     "offset": 146,
+     "length": 770,
+     "hex": "0bff050100418580040bf6050800001000001800002000012800022f00023600033d00044400054b00065100075800085e000a64000b6a000d6f000e7500107a00128001138501158901178e011993011b97011d9b0220a00222a40224a70226ab0329af032bb2032eb50430b90433bc0535bf0538c1053ac4063dc70640c90742cb0845cd0848d0094bd2094dd30a50d50b53d70b56d80c59da0d5cdb0d5fdc0e61dd0f64de1067df116ae0126de11270e21373e21476e31578e3167be4177ee41881e41a84e41b87e41c89e41d8ce41e8fe41f92e32195e32297e3239ae2259de2269fe127a2e029a4e02aa7df2ca9de2dacdd2faedc30b1db32b3da33b6d935b8d837bad738bcd63abfd43cc1d33dc3d23fc5d041c7cf43c9cd44cbcc46cdca48cfc94ad1c74cd2c54ed4c450d6c252d7c054d9be56dabd58dcbb5addb95cdfb75ee0b560e1b362e2b164e4af66e5ad68e6ab6ae7a96de8a76fe8a571e9a373eaa175eb9f77eb9d7aec9b7cec997eed9780ed9583ee9385ee9187ee8e89ee8c8cee8a8eef8890ef8692ee8495ee8297ee8099ee7d9bee7b9eed79a0ed77a2ec75a4ec73a6eb71a9eb6fabea6dade96bafe869b1e866b3e764b6e662b8e560bae45ebce25cbee15ac0e059c2df57c4dd55c6dc53c8da51cad94fccd74dcdd64bcfd449d1d248d3d146d4cf44d6cd42d8cb41d9c93fdbc73ddcc53bdec33adfc138e1bf37e2bc35e3ba33e5b832e6b630e7b32fe8b12de9ae2ceaac2beba929eca728eda426eea225ee9f24ef9d23f09a21f09720f0951ff1921ef18f1cf18c1bf1891af28719f28418f18117f17e16f17b15f17814f07613f07312ef7011ee6d11ee6a10ed670fec640eeb610de95f0de85c0ce7590be5560be3530ae25009e04d09de4b08dc4808da4507d74207d54006d23d06d03a05cd3805ca3504c73304c33004c02e03bd2b03b92903b52602b12402ad2202a92002a51d01a01b019b19019717019215018c13008712008210007c0e00760d00700b006a0a006408005d07005606004f05004804004103003902003202002a01002200001a000011000008"
+    },
+    {
+     "name": "custom: producers",
+     "id": 0,
+     "offset": 916,
+     "length": 75,
+     "hex": "00490970726f64756365727302086c616e6775616765010e435f706c75735f706c75735f3134000c70726f6365737365642d6279010e486f6d656272657720636c616e670632332e312e34"
+    },
+    {
+     "name": "custom: target_features",
+     "id": 0,
+     "offset": 991,
+     "length": 151,
+     "hex": "0094010f7461726765745f6665617475726573082b0f6d757461626c652d676c6f62616c732b136e6f6e7472617070696e672d6670746f696e742b0b62756c6b2d6d656d6f72792b087369676e2d6578742b0f7265666572656e63652d74797065732b0a6d756c746976616c75652b0f62756c6b2d6d656d6f72792d6f70742b1663616c6c2d696e6469726563742d6f7665726c6f6e67"
+    }
+   ]
+  },
+  {
+   "id": "04-virtual",
+   "title": "A virtual call becomes call_indirect",
+   "blurb": "Shape::area() through a base pointer. The vtable is data, the targets live in a function table, and the call is call_indirect with a type: the engine checks the signature at every call. That check is part of what makes it safe.",
+   "source": "struct Shape {\n    virtual double area() const = 0;\n};\n\nstruct Circle : Shape {\n    double r;\n    constexpr Circle(double r) : r(r) {}\n    double area() const override { return 3.14159265 * r * r; }\n};\n\nstruct Square : Shape {\n    double s;\n    constexpr Square(double s) : s(s) {}\n    double area() const override { return s * s; }\n};\n\nstatic Circle circle{1.0};\nstatic Square square{2.0};\n\nextern \"C\" const Shape* pick(int which) {\n    return which ? static_cast<const Shape*>(&square) : static_cast<const Shape*>(&circle);\n}\n\nextern \"C\" double area(const Shape* s) {\n    return s->area();          // -> call_indirect\n}\n\n// -nostdlib: we provide the one runtime hook a pure virtual needs.\nextern \"C\" void __cxa_pure_virtual() { __builtin_trap(); }",
+   "ir_O0": "%struct.Square = type { %struct.Shape, double }\n%struct.Shape = type { ptr }\n%struct.Circle = type { %struct.Shape, double }\n@_ZTV6Square = constant { [3 x ptr] } { [3 x ptr] [ptr null, ptr null, ptr @_ZNK6Square4areaEv] }, align 4\n@_ZL6square = internal global { ptr, double } { ptr getelementptr inbounds inrange(-8, 4) ({ [3 x ptr] }, ptr @_ZTV6Square, i32 0, i32 0, i32 2), double 2.000000e+00 }, align 8\n@_ZTV6Circle = constant { [3 x ptr] } { [3 x ptr] [ptr null, ptr null, ptr @_ZNK6Circle4areaEv] }, align 4\n@_ZL6circle = internal global { ptr, double } { ptr getelementptr inbounds inrange(-8, 4) ({ [3 x ptr] }, ptr @_ZTV6Circle, i32 0, i32 0, i32 2), double 1.000000e+00 }, align 8\ndefine ptr @pick(i32 %0) {\n  %2 = alloca i32, align 4\n  store i32 %0, ptr %2, align 4\n  %3 = load i32, ptr %2, align 4\n  %4 = icmp ne i32 %3, 0\n  %5 = zext i1 %4 to i64\n  %6 = select i1 %4, ptr @_ZL6square, ptr @_ZL6circle\n  ret ptr %6\n}\ndefine double @area(ptr %0) {\n  %2 = alloca ptr, align 4\n  store ptr %0, ptr %2, align 4\n  %3 = load ptr, ptr %2, align 4\n  %4 = load ptr, ptr %3, align 4\n  %5 = getelementptr inbounds ptr, ptr %4, i64 0\n  %6 = load ptr, ptr %5, align 4\n  %7 = call double %6(ptr align 4 %3)\n  ret double %7\n}\ndefine void @__cxa_pure_virtual() {\n  call void @llvm.trap()\n  ret void\n}\ndefine double @_ZNK6Square4areaEv(ptr align 8 %0) {\n  %2 = alloca ptr, align 4\n  store ptr %0, ptr %2, align 4\n  %3 = load ptr, ptr %2, align 4\n  %4 = getelementptr inbounds nuw %struct.Square, ptr %3, i32 0, i32 1\n  %5 = load double, ptr %4, align 8\n  %6 = getelementptr inbounds nuw %struct.Square, ptr %3, i32 0, i32 1\n  %7 = load double, ptr %6, align 8\n  %8 = fmul double %5, %7\n  ret double %8\n}\ndefine double @_ZNK6Circle4areaEv(ptr align 8 %0) {\n  %2 = alloca ptr, align 4\n  store ptr %0, ptr %2, align 4\n  %3 = load ptr, ptr %2, align 4\n  %4 = getelementptr inbounds nuw %struct.Circle, ptr %3, i32 0, i32 1\n  %5 = load double, ptr %4, align 8\n  %6 = fmul double f0x400921FB53C8D4F1, %5\n  %7 = getelementptr inbounds nuw %struct.Circle, ptr %3, i32 0, i32 1\n  %8 = load double, ptr %7, align 8\n  %9 = fmul double %6, %8\n  ret double %9\n}",
+   "ir_O2": "@_ZTV6Square = constant { [3 x ptr] } { [3 x ptr] [ptr null, ptr null, ptr @_ZNK6Square4areaEv] }, align 4\n@_ZL6square = internal global { ptr, double } { ptr getelementptr inbounds inrange(-8, 4) ({ [3 x ptr] }, ptr @_ZTV6Square, i32 0, i32 0, i32 2), double 2.000000e+00 }, align 8\n@_ZTV6Circle = constant { [3 x ptr] } { [3 x ptr] [ptr null, ptr null, ptr @_ZNK6Circle4areaEv] }, align 4\n@_ZL6circle = internal global { ptr, double } { ptr getelementptr inbounds inrange(-8, 4) ({ [3 x ptr] }, ptr @_ZTV6Circle, i32 0, i32 0, i32 2), double 1.000000e+00 }, align 8\ndefine ptr @pick(i32 %0) {\n  %2 = icmp eq i32 %0, 0\n  %3 = select i1 %2, ptr @_ZL6circle, ptr @_ZL6square\n  ret ptr %3\n}\ndefine double @area(ptr %0) {\n  %2 = load ptr, ptr %0, align 4\n  %3 = load ptr, ptr %2, align 4\n  %4 = call double %3(ptr align 4 %0)\n  ret double %4\n}\ndefine void @__cxa_pure_virtual() {\n  call void @llvm.trap()\n  unreachable\n}\ndefine double @_ZNK6Square4areaEv(ptr align 8 %0) {\n  %2 = getelementptr inbounds nuw i8, ptr %0, i32 8\n  %3 = load double, ptr %2, align 8\n  %4 = fmul double %3, %3\n  ret double %4\n}\ndefine double @_ZNK6Circle4areaEv(ptr align 8 %0) {\n  %2 = getelementptr inbounds nuw i8, ptr %0, i32 8\n  %3 = load double, ptr %2, align 8\n  %4 = fmul double %3, f0x400921FB53C8D4F1\n  %5 = fmul double %3, %4\n  ret double %5\n}",
+   "wat": "(module\n  (type (;0;) (func (param i32) (result f64)))\n  (type (;1;) (func (param i32) (result i32)))\n  (type (;2;) (func))\n  (func $pick (type 1) (param i32) (result i32)\n    i32.const 65560\n    i32.const 65576\n    local.get 0\n    select)\n  (func $area (type 0) (param i32) (result f64)\n    local.get 0\n    local.get 0\n    i32.load\n    i32.load\n    call_indirect (type 0))\n  (func $__cxa_pure_virtual (type 2)\n    unreachable)\n  (func (;3;) (type 0) (param i32) (result f64)\n    (local f64)\n    local.get 0\n    f64.load offset=8\n    local.tee 1\n    local.get 1\n    f64.mul)\n  (func (;4;) (type 0) (param i32) (result f64)\n    (local f64)\n    local.get 0\n    f64.load offset=8\n    local.tee 1\n    local.get 1\n    f64.const 0x1.921fb53c8d4f1p+1 (;=3.14159;)\n    f64.mul\n    f64.mul)\n  (table (;0;) 3 3 funcref)\n  (memory (;0;) 2)\n  (export \"memory\" (memory 0))\n  (export \"pick\" (func 0))\n  (export \"area\" (func 1))\n  (export \"__cxa_pure_virtual\" (func 2))\n  (elem (;0;) (i32.const 1) func 3 4)\n  (data (;0;) (i32.const 65544) \"\\01\")\n  (data (;1;) (i32.const 65556) \"\\02\")\n  (data (;2;) (i32.const 65560) \"\\08\\00\\01\")\n  (data (;3;) (i32.const 65575) \"@\\14\\00\\01\")\n  (data (;4;) (i32.const 65590) \"\\f0?\")",
+   "counts": {
+    "ir_O0": 36,
+    "ir_O2": 18,
+    "wat": 22,
+    "bytes": 456
+   },
+   "sections": [
+    {
+     "name": "magic + version",
+     "id": null,
+     "offset": 0,
+     "length": 8,
+     "hex": "0061736d01000000"
+    },
+    {
+     "name": "type",
+     "id": 1,
+     "offset": 8,
+     "length": 16,
+     "hex": "010e0360017f017c60017f017f600000"
+    },
+    {
+     "name": "function",
+     "id": 3,
+     "offset": 24,
+     "length": 8,
+     "hex": "0306050100020000"
+    },
+    {
+     "name": "table",
+     "id": 4,
+     "offset": 32,
+     "length": 7,
+     "hex": "04050170010303"
+    },
+    {
+     "name": "memory",
+     "id": 5,
+     "offset": 39,
+     "length": 5,
+     "hex": "0503010002"
+    },
+    {
+     "name": "export",
+     "id": 7,
+     "offset": 44,
+     "length": 47,
+     "hex": "072d04066d656d6f72790200047069636b000004617265610001125f5f6378615f707572655f7669727475616c0002"
+    },
+    {
+     "name": "elem",
+     "id": 9,
+     "offset": 91,
+     "length": 10,
+     "hex": "0908010041010b020304"
+    },
+    {
+     "name": "datacount",
+     "id": 12,
+     "offset": 101,
+     "length": 3,
+     "hex": "0c0105"
+    },
+    {
+     "name": "code",
+     "id": 10,
+     "offset": 104,
+     "length": 77,
+     "hex": "0a4b050d004198800441a8800420001b0b0f00200020002802002802001100000b0300000b0e01017c20002b030822012001a20b1801017c20002b03082201200144f1d4c853fb210940a2a20b"
+    },
+    {
+     "name": "data",
+     "id": 11,
+     "offset": 181,
+     "length": 49,
+     "hex": "0b2f0500418880040b010100419480040b010200419880040b030800010041a780040b04401400010041b680040b02f03f"
+    },
+    {
+     "name": "custom: producers",
+     "id": 0,
+     "offset": 230,
+     "length": 75,
+     "hex": "00490970726f64756365727302086c616e6775616765010e435f706c75735f706c75735f3134000c70726f6365737365642d6279010e486f6d656272657720636c616e670632332e312e34"
+    },
+    {
+     "name": "custom: target_features",
+     "id": 0,
+     "offset": 305,
+     "length": 151,
+     "hex": "0094010f7461726765745f6665617475726573082b0f6d757461626c652d676c6f62616c732b136e6f6e7472617070696e672d6670746f696e742b0b62756c6b2d6d656d6f72792b087369676e2d6578742b0f7265666572656e63652d74797065732b0a6d756c746976616c75652b0f62756c6b2d6d656d6f72792d6f70742b1663616c6c2d696e6469726563742d6f7665726c6f6e67"
+    }
+   ]
+  }
+ ],
+ "builds": [
+  {
+   "id": "O0",
+   "flags": "-O0",
+   "file": "fractal-O0.wasm",
+   "bytes": 3209,
+   "instructions": 697
+  },
+  {
+   "id": "O1",
+   "flags": "-O1",
+   "file": "fractal-O1.wasm",
+   "bytes": 1820,
+   "instructions": 299
+  },
+  {
+   "id": "O2",
+   "flags": "-O2",
+   "file": "fractal-O2.wasm",
+   "bytes": 1948,
+   "instructions": 375
+  },
+  {
+   "id": "O3",
+   "flags": "-O3",
+   "file": "fractal-O3.wasm",
+   "bytes": 2116,
+   "instructions": 448
+  },
+  {
+   "id": "O3-simd",
+   "flags": "-O3 -msimd128",
+   "file": "fractal-O3-simd.wasm",
+   "bytes": 2462,
+   "instructions": 500
+  }
+ ]
+}

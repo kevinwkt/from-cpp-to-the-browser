@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mandelbrot in C → WASM · JSConf Mexico</title>
+  <style>
+    :root {
+      --ink:#1C1430; --violet:#5B4B8A; --mint:#1FB6A6; --lilac:#EFEAFC; --muted:#6A6280;
+    }
+    * { box-sizing: border-box; }
+    body { font: 16px/1.5 system-ui, -apple-system, sans-serif; color: var(--ink);
+           background: #faf8ff; margin: 0; padding: 4vh 20px; }
+    .wrap { max-width: 780px; margin: 0 auto; }
+    h1 { font: 700 1.5rem/1.2 Georgia, serif; margin: 0 0 .2rem; }
+    .sub { color: var(--muted); margin: 0 0 1.2rem; }
+    canvas { width: 100%; height: auto; border-radius: 12px; cursor: crosshair;
+             box-shadow: 0 10px 40px rgba(28,20,48,.25); display: block; background:#000; }
+    .bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: 1rem 0; }
+    button { font: 600 .95rem system-ui; padding: .5rem .9rem; border: 0; border-radius: 8px;
+             background: var(--violet); color: #fff; cursor: pointer; }
+    button.ghost { background: var(--lilac); color: var(--ink); }
+    button:active { transform: translateY(1px); }
+    label { color: var(--muted); font-size: .9rem; }
+    input[type=range] { vertical-align: middle; accent-color: var(--mint); }
+    .stats { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: .6rem;
+             font-variant-numeric: tabular-nums; }
+    .stat b { font: 700 1.4rem Georgia, serif; color: var(--ink); display: block; }
+    .stat span { color: var(--muted); font-size: .8rem; }
+    .mint { color: var(--mint); }
+    code { background: var(--lilac); padding: .1rem .35rem; border-radius: 5px; }
+    .hint { color: var(--muted); font-size: .9rem; margin-top: .8rem; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>A Mandelbrot set, computed in C, running in your browser</h1>
+  <p class="sub">C writes the pixels straight into WebAssembly memory; JavaScript paints them.
+     <b>Click the image to zoom in.</b></p>
+
+  <canvas id="cv" width="720" height="480"></canvas>
+
+  <div class="bar">
+    <button id="zoomOut" class="ghost">Zoom out</button>
+    <button id="reset" class="ghost">Reset</button>
+    <button id="surprise">Surprise me ✨</button>
+    <label>detail (maxIter): <input id="iter" type="range" min="80" max="1200" value="250" step="10">
+      <span id="iterVal">250</span></label>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="ms" class="mint">—</b><span>render time</span></div>
+    <div class="stat"><b id="zoom">1×</b><span>zoom</span></div>
+    <div class="stat"><b id="work">—</b><span>avg iterations / pixel</span></div>
+  </div>
+
+  <p class="hint">Every click recomputes the whole image in C. As you zoom or raise the detail
+     slider, watch the <span class="mint">render time</span> climb — that's the cost of real
+     compute, happening in a sandbox next to your JavaScript. <span id="status"></span></p>
+</div>
+
+<script type="module">
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+
+  // View state in the complex plane.
+  const HOME = { cx: -0.6, cy: 0.0, scale: 1.6 };
+  let view = { ...HOME };
+  let W = 720, H = 480, ex = null, mem = null, ptr = null;
+
+  // A few genuinely pretty coordinates for "Surprise me".
+  const SPOTS = [
+    { cx: -0.743643887, cy: 0.131825904, scale: 0.012 },  // seahorse valley
+    { cx: -0.7435669,   cy: 0.1314023,   scale: 0.0008 },  // deep spiral
+    { cx: 0.2929859127, cy: 0.6117848324, scale: 0.004 },
+    { cx: -1.25066,     cy: 0.02012,      scale: 0.0035 },
+    { cx: -0.16070135,  cy: 1.0375665,    scale: 0.004 },
+  ];
+
+  try {
+    const r = await fetch('fractal-basic.wasm');
+    const { instance } = await WebAssembly.instantiateStreaming(r, {});
+    ex = instance.exports;
+    mem = ex.memory;
+    W = ex.width(); H = ex.height();
+    cv.width = W; cv.height = H;
+    ptr = ex.buffer();
+    draw();
+  } catch (e) {
+    $('status').textContent = '⚠ Could not load fractal.wasm — run ./build.sh and serve over http. ' + e;
+  }
+
+  function draw() {
+    if (!ex) return;
+    const maxIter = +$('iter').value;
+    const t0 = performance.now();
+    const avg = ex.render(view.cx, view.cy, view.scale, maxIter);
+    const dt = performance.now() - t0;
+
+    // The shared-memory moment: read C's pixels directly out of WASM memory.
+    const bytes = new Uint8ClampedArray(mem.buffer, ptr, W * H * 4);
+    const img = ctx.createImageData(W, H);
+    img.data.set(bytes);
+    ctx.putImageData(img, 0, 0);
+
+    $('ms').textContent = dt.toFixed(1) + ' ms';
+    $('zoom').textContent = Math.round(HOME.scale / view.scale) + '×';
+    $('work').textContent = avg;
+  }
+
+  cv.addEventListener('click', (e) => {
+    const rect = cv.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const aspect = H / W;
+    view.cx += ((px * 2) - 1) * view.scale;
+    view.cy += ((py * 2) - 1) * view.scale * aspect;
+    view.scale *= 0.45;            // zoom in
+    draw();
+  });
+
+  $('zoomOut').onclick = () => { view.scale = Math.min(view.scale / 0.45, HOME.scale); draw(); };
+  $('reset').onclick   = () => { view = { ...HOME }; $('iter').value = 250; $('iterVal').textContent = '250'; draw(); };
+  $('surprise').onclick = () => { view = { ...SPOTS[Math.floor(Math.random()*SPOTS.length)] }; draw(); };
+  $('iter').oninput = () => { $('iterVal').textContent = $('iter').value; draw(); };
+</script>
+</body>
+</html>

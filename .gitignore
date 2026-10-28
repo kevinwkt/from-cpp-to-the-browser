@@ -1,3 +1,4 @@
 .DS_Store
 demo/fractal.opt.wasm
 demo/fractal.js
+demo/specimens/*.wasm
