@@ -98,6 +98,9 @@
     .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600;
              background: #d9f5f1; color: #0e7f74; }
     .badge.bad { background: #fde7e7; color: #a12; }
+    .explain { margin-top: .8rem; background: #fff; border: 1px solid #e6e0f7; border-left: 5px solid var(--mint); border-radius: 10px; padding: .8rem 1rem; font-size: .95rem; }
+    .explain h4 { margin: 0 0 .4rem; font: 700 1.05rem Georgia, serif; }
+    .explain p { margin: .35rem 0; } .explain b { color: var(--violet); } .explain .k { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
     /* boundary lab */
     .lab { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: .9rem; }
     .card { background: #fff; border: 1px solid #e6e0f7; border-radius: 12px; padding: .9rem 1rem; }
@@ -175,9 +178,10 @@
     </div>
     <div>
       <div class="builds" id="builds"></div>
-      <div class="bar"><button id="raceBtn" class="mint">Race all ▶</button> <span id="raceNote" class="note"></span></div>
+      <div class="bar"><button id="raceBtn" class="mint">Race all ▶</button> <button id="explainBtn" class="ghost" disabled>Explain the results</button> <span id="raceNote" class="note"></span></div>
       <div class="chart" id="chart"></div>
       <p class="note" id="identical"></p>
+      <div class="explain" id="explain" hidden></div>
     </div>
       <details class="jsrc"><summary>Show the code in this race: C++ and JavaScript</summary>
         <div class="cols2">
@@ -241,11 +245,13 @@
     <div>
       <div class="bar">
         <button id="intBtn" class="mint">Race ▶</button>
+        <button id="intExplainBtn" class="ghost" disabled>Explain the results</button>
         <label>rounds over the frame: <input id="intRounds" type="range" min="1" max="8" value="4" step="1"> <span id="intRoundsVal">4</span></label>
         <span class="note" id="intNote"></span>
       </div>
       <div class="chart" id="intChart"></div>
       <p class="note" id="intSame"></p>
+      <div class="explain" id="intExplain" hidden></div>
       <p class="note">Input: the current view rendered by -O0 and -O3 into their own memories; the JavaScript versions read -O3's buffer. The hash must come out identical from all four. Best of 3 after a warm-up; a run over 400 ms is timed once.</p>
     </div>
     <div class="stats">
@@ -424,7 +430,28 @@ function selectBuild(id) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let racing = false;
+let racing = false, lastRace = null;
+const x = (a, b) => (a / b).toFixed(1) + '×';
+function explainRace() {
+  if (!lastRace) return;
+  const r = lastRace.results, o3 = r.O3 ?? r.O2, el = $('explain');
+  const parts = [`<h4>What the bars say</h4>`];
+  if (r.O0 !== undefined && o3) parts.push(`<p><b>-O0 is ${x(r.O0, o3)} slower than -O3.</b> Same source, same engine, same JIT. At -O0 every local lives in memory and every call is a real call; the engine's optimizer cannot recover what the toolchain did not do. That bar is the thesis: the toolchain decides what the bytes say.</p>`);
+  if (r.O1 !== undefined && o3) parts.push(`<p><b>-O1 is already ${x(r.O1, o3)} of -O3.</b> mem2reg and inlining do most of the work; -O2 and -O3 add unrolling and scheduling that this loop barely uses.</p>`);
+  if (r.js !== undefined && o3) {
+    const ratio = r.js / o3;
+    parts.push(ratio < 1.25
+      ? `<p><b>JavaScript ties -O3 (${x(r.js, o3)}).</b> This is the JIT's best case: one small monomorphic function over doubles, no allocation, no property access. TurboFan speculates "these are doubles", the guess never fails, and it emits the same machine code Clang would. WebAssembly is not faster JavaScript here. Its case is predictability, no warm-up cliff, SIMD, and running the C++ you already have. Tab 4 shows the workload where the JIT cannot tie.</p>`
+      : `<p><b>JavaScript is ${x(r.js, o3)} slower than -O3.</b> Usually it ties on this loop; a gap this size means the window was in the background or the laptop is throttled. Bring the window to the front and race again.</p>`);
+  }
+  if (r['O3-simd'] !== undefined && o3) parts.push(`<p><b>SIMD: ${x(o3, r['O3-simd'])} faster than -O3.</b> Two pixels per instruction in f64x2 lanes. Not 2× because the lanes run in lockstep: when one pixel escapes early its lane keeps computing, masked out, until its neighbour finishes. JavaScript has no way to express a lane, so this is the one bar it can never match.</p>`);
+  parts.push(lastRace.same
+    ? `<p><b>Identical pixels from every build.</b> IEEE-754 arithmetic in the same order with no fused multiply-add; the frontend's llvm.fmuladd is split again for WebAssembly. Same meaning, different machine, and a property you have to defend rather than get for free.</p>`
+    : `<p><b>The outputs differ</b>, which should not happen; a stale module or a browser bug. Hard-reload and race again.</p>`);
+  parts.push(`<p class="note">maxIter ${lastRace.maxIter}, ${lastRace.zoom.toFixed(0)}× zoom, best of 3 after a warm-up. Numbers move with the view: the boundary of the set has the most divergence, so SIMD gains the least there.</p>`);
+  el.innerHTML = parts.join(''); el.hidden = !el.hidden;
+}
+$('explainBtn').onclick = explainRace;
 async function race() {
   if (racing) return;
   racing = true; $('raceBtn').disabled = true;
@@ -461,6 +488,8 @@ async function race() {
   const bestId = order.reduce((a, b) => results[a] <= results[b] ? a : b);
   rows[bestId].classList.add('best');
   const same = order.every(id => digests[id] === digests[order[0]]);
+  lastRace = { results, same, maxIter, zoom: HOME.scale / view.scale };
+  $('explainBtn').disabled = false; $('explain').hidden = true;
   $('identical').innerHTML = same
     ? `<span class="badge">identical pixels from all ${order.length}</span> Same meaning, different machine. Best of 3 runs each, after a warm-up.`
     : `<span class="badge bad">outputs differ</span> ${order.map(id => BUILD_LABEL[id] + ': ' + digests[id].split(':')[1]).join(' · ')}`;
@@ -587,7 +616,19 @@ function hashWith(id, rounds) {
   const h = m.ex.fnv64(m.ptr, n, rounds);           // i64 result arrives as a BigInt
   return { ms: performance.now() - t0, h };
 }
-let intRacing = false;
+let intRacing = false, lastIntRace = null;
+function explainIntRace() {
+  if (!lastIntRace) return;
+  const r = lastIntRace.results, el = $('intExplain');
+  const parts = [`<h4>What the bars say</h4>`,
+    `<p><b>JavaScript with BigInt is ${x(r.jsBig, r.O3)} slower than C++ at -O3.</b> BigInt is arbitrary precision: every <span class="k">^</span> and <span class="k">*</span> allocates a new heap object and the result has to be masked back to 64 bits. V8 has fast paths for values that fit in 64 bits, but the allocation and the generic dispatch stay. This is the natural way to write it, and it loses by an order of magnitude.</p>`,
+    `<p><b>JavaScript with 32-bit halves is ${x(r.jsSplit, r.O3)} slower.</b> This is the expert version: the state is two uint32 values and the 64-bit multiply is done from 16-bit limbs, ten partial products plus carries, the way Long.js does it. About thirty int32 operations per byte, which TurboFan compiles well. It is the best a person can do without a 64-bit integer, and it is still ${x(r.jsSplit, r.O3)}.</p>`,
+    `<p><b>Even C++ at -O0 (${x(r.O0, r.O3)}) beats both.</b> The multiply is one <span class="k">i64.mul</span> at every optimization level; -O0 only wraps it in loads and stores. There is less for the optimizer to remove here than in the fractal, so the -O0 gap is smaller.</p>`,
+    lastIntRace.same ? `<p><b>Identical hash from all four</b>, by construction: integer arithmetic mod 2<sup>64</sup> is exact, no rounding anywhere. The check also proves -O0 and -O3 rendered the same frame into their separate memories.</p>` : `<p><b>The hashes differ</b>, which should not happen. Hard-reload and race again.</p>`,
+    `<p class="note">The honest pairing with Tab 2: on a tight double loop the JIT ties, because that is something JavaScript can say. On 64-bit integers it cannot, and neither can a careful human. "Is WebAssembly faster?" depends on whether the work is something JavaScript can express.</p>`];
+  el.innerHTML = parts.join(''); el.hidden = !el.hidden;
+}
+$('intExplainBtn').onclick = explainIntRace;
 async function intRace() {
   if (intRacing) return;
   if (!mods.O3 || !mods.O0) { $('intNote').textContent = 'the -O0 and -O3 modules did not load'; return; }
@@ -622,6 +663,8 @@ async function intRace() {
   const bestId = INT_ORDER.reduce((a, b) => results[a] <= results[b] ? a : b);
   rows[bestId].classList.add('best');
   const same = INT_ORDER.every(id => hashes[id] === hashes.O3);
+  lastIntRace = { results, same, rounds };
+  $('intExplainBtn').disabled = false; $('intExplain').hidden = true;
   $('intHash').textContent = hashes.O3;
   $('intSame').innerHTML = same
     ? `<span class="badge">identical hash from all 4</span> Same bytes in, same 64 bits out. The milliseconds are the only difference.`

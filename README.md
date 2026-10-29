@@ -12,7 +12,7 @@ Slides and live demo for my talk at **[JSConf México 2026](https://www.jsconf.m
 
 | Path | What it is |
 |---|---|
-| [`slides/`](slides/) | The deck as PDF (25 slides) |
+| [`slides/`](slides/) | The deck as PDF (25 slides) A Spanish copy of the deck is in `slides/From-Cpp-to-the-Browser-JSConfMX-2026-ES.pptx`. |
 | [`demo/`](demo/) | The live demo ([run it here](https://kevinwkt.github.io/from-cpp-to-the-browser/demo/)): a pipeline explorer over five C++ specimens, a Mandelbrot renderer compiled at -O0…-O3 and with SIMD raced against plain JavaScript, a JS ↔ WASM boundary lab, and a 64-bit integer race where JavaScript cannot tie. |
 | [`NOTES.md`](NOTES.md) | The theory behind every stage and every demo beat, with sources |
 | [`specimen/`](specimen/) | The one function the talk follows, with the real compiler output at every stage and a script to regenerate it |
