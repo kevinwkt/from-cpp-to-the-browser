@@ -341,7 +341,7 @@ const SPOTS = [
 const cv = $('cv'), ctx = cv.getContext('2d');
 
 async function loadModule(id) {
-  const r = await fetch(`fractal-${id}.wasm`);
+  const r = await fetch(`fractal-${id}.wasm`, { cache: 'no-cache' });   // revalidate: a stale module lacks newer exports
   const { instance } = await WebAssembly.instantiateStreaming(r, {});
   const ex = instance.exports;
   return { id, ex, mem: ex.memory, ptr: ex.buffer(), W: ex.width(), H: ex.height() };
@@ -422,6 +422,7 @@ let racing = false;
 async function race() {
   if (racing) return;
   racing = true; $('raceBtn').disabled = true;
+  try {
   const maxIter = +$('iter').value;
   const order = ['js', ...BUILD_IDS].filter(id => id === 'js' || mods[id]);
   const chart = $('chart'); chart.innerHTML = '';
@@ -458,8 +459,12 @@ async function race() {
     ? `<span class="badge">identical pixels from all ${order.length}</span> Same meaning, different machine. Best of 3 runs each, after a warm-up.`
     : `<span class="badge bad">outputs differ</span> ${order.map(id => BUILD_LABEL[id] + ': ' + digests[id].split(':')[1]).join(' · ')}`;
   $('raceNote').textContent = `maxIter ${maxIter}, ${(HOME.scale / view.scale).toFixed(0)}× zoom. Times are ×  relative to -O3.`;
-  racing = false; $('raceBtn').disabled = false;
   selectBuild(current);
+  } catch (e) {
+    $('raceNote').textContent = 'race failed: ' + e; console.error(e);
+  } finally {
+    racing = false; $('raceBtn').disabled = false;
+  }
 }
 
 /* ------------------------------------------------------------------ 3. boundary lab */
@@ -578,8 +583,13 @@ function hashWith(id, rounds) {
 }
 let intRacing = false;
 async function intRace() {
-  if (intRacing || !mods.O3 || !mods.O0) return;
+  if (intRacing) return;
+  if (!mods.O3 || !mods.O0) { $('intNote').textContent = 'the -O0 and -O3 modules did not load'; return; }
+  if (!mods.O3.ex.fnv64 || !mods.O0.ex.fnv64) {
+    $('intNote').textContent = 'stale modules from the browser cache (no fnv64 export): hard-reload with Cmd+Shift+R'; return;
+  }
   intRacing = true; $('intBtn').disabled = true;
+  try {
   const rounds = +$('intRounds').value, maxIter = +$('iter').value;
   for (const id of ['O0', 'O3']) mods[id].ex.render(view.cx, view.cy, view.scale, maxIter);   // same frame in both memories
   $('intBytes').textContent = (W * H * 4).toLocaleString();
@@ -611,7 +621,11 @@ async function intRace() {
     ? `<span class="badge">identical hash from all 4</span> Same bytes in, same 64 bits out. The milliseconds are the only difference.`
     : `<span class="badge bad">hashes differ</span> ${INT_ORDER.map(id => INT_LABEL[id] + ': ' + hashes[id]).join(' · ')}`;
   $('intNote').textContent = `${rounds} round${rounds > 1 ? 's' : ''} × ${(W * H * 4).toLocaleString()} bytes. Times are × relative to -O3.`;
-  intRacing = false; $('intBtn').disabled = false;
+  } catch (e) {
+    $('intNote').textContent = 'race failed: ' + e; console.error(e);
+  } finally {
+    intRacing = false; $('intBtn').disabled = false;
+  }
 }
 function hiJS(s) {
   return esc(s)
@@ -624,7 +638,7 @@ async function fillSources() {
   $('intJsBig').innerHTML = hiJS(fnv64BigInt.toString());
   $('intJsSplit').innerHTML = hiJS(fnv64Split.toString());
   try {
-    const src = await (await fetch('fractal.cpp')).text();
+    const src = await (await fetch('fractal.cpp', { cache: 'no-cache' })).text();
     const a = src.indexOf('// 5. The integer workload');
     const b = src.indexOf('\n}\n', a) + 2;
     $('intCpp').innerHTML = hiCPP(src.slice(a, b).split('\n').filter(l => !/^\/\/ -{10,}$/.test(l)).join('\n'));
@@ -663,7 +677,7 @@ function pageZoom(d) { zoomLevel = Math.min(2, Math.max(0.6, zoomLevel + d)); do
 
 /* ------------------------------------------------------------------ boot */
 try {
-  data = await (await fetch('pipeline.json')).json();
+  data = await (await fetch('pipeline.json', { cache: 'no-cache' })).json();
   $('compiler').textContent = data.compiler + ' · --target=wasm32 -nostdlib';
   $('specimens').innerHTML = data.specimens.map(s => `<button data-id="${s.id}">${s.title}</button>`).join('');
   document.querySelectorAll('#specimens button').forEach(b => b.onclick = () => showSpecimen(b.dataset.id));
@@ -679,6 +693,7 @@ try {
   selectBuild(mods.O3 ? 'O3' : Object.keys(mods)[0]);
   lab();
   fillSources();
+  if (Object.values(mods).some(m => !m.ex.fnv64)) status('Some modules came from an old browser cache (no fnv64 export). Hard-reload: Cmd+Shift+R.');
   const missing = BUILD_IDS.filter(id => !mods[id]);
   if (missing.length) status('Could not load: ' + missing.join(', ') + ' (engine lacks the feature, or run ./build.sh).');
 } catch (e) {
