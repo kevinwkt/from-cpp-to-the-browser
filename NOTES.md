@@ -150,6 +150,20 @@ Measured (same laptop, foreground Chrome, 4 rounds × 1,382,400 bytes, best of 3
 
 Specimen 5 in Tab 1 is the same loop through the pipeline. At -O2 LLVM unrolls it, so the IR grows from 31 to 58 instructions and the WebAssembly carries several `i64.mul` for one in the source: an optimization that trades bytes for fewer branches.
 
+## 13. The four words from the abstract (slide 16)
+
+The abstract promises to demystify stack machines, linear memory, sandboxing and portable binaries. Slide 16 pays that off in four cards; this is the longer version to have in your head.
+
+**Stack machine.** A register machine says "add r1, r2 into r3". A stack machine says "add", and the operands are whatever the last two instructions left on an implicit stack. `add(a, b)` is `local.get 0`, `i32.const 1`, `i32.shl`, `local.get 1`, `i32.add`: push a, push 1, shift (pops two, pushes one), push b, add (pops two, pushes one), and the one value left is the result. Three consequences. The encoding is tiny because no instruction names registers. Validation is a single linear pass, since the type of every stack slot is known at every instruction, so a module is proven well-typed before any of it runs. And the engine is free to choose real registers when it compiles, which is why Liftoff and TurboFan can both consume the same bytes. The `local.get`/`local.set` instructions are the escape hatch: locals are named slots beside the stack, and `mem2reg` at -O2 is what turns memory traffic into them.
+
+**Linear memory.** The module's entire addressable world is one array of bytes, starting at 0, growable in 64 KiB pages, with nothing else in it: no code, no engine stack frames, no JavaScript objects. A C++ pointer compiles to a plain i32 index into that array. Every `i32.load` and `i32.store` is bounds-checked against the current size (on 64-bit hosts the check is a reserved guard region and a page fault, so it costs nothing). JavaScript holds the same bytes as `memory.buffer`, an ArrayBuffer, which is why strings cross as pointer + length and why `memory.grow()` detaches old views: the buffer object was replaced. wasm-ld lays out the data section, the C++ stack and the heap inside this array before the engine ever sees it (§4).
+
+**Sandbox.** A WebAssembly module has no ambient authority. It cannot name the DOM, a file, a socket, the clock or another module's memory, because there are no instructions for any of them. The only way out is an import: a function JavaScript chose to hand in at instantiation. The demo's modules import nothing, which is why Tab 3's export list is the complete surface. Three mechanisms make the sandbox hold: validation (every instruction well-typed before execution), bounds-checked linear memory (no load or store outside the array), and typed `call_indirect` (a function-pointer call checks the signature, so a corrupted vtable traps instead of jumping somewhere). "Safe" on slide 14 is those three.
+
+**Portable binary.** The `.wasm` file is a specification-defined format, not a CPU's. Every compliant engine on every architecture accepts the same bytes and gives the same results, because the semantics (IEEE-754 arithmetic, two's-complement integers, defined trap behaviour) are fixed by the spec, not by the host. The toolchain decides what the bytes say, which is the thesis of the talk; the engine only decides how fast they run. The caveats from §9 still apply: optional features like SIMD must be supported by the engine, and relaxed SIMD trades bit-exactness for speed on purpose. The byte-identical rebuild from a fresh clone (§11) is the same property seen from the build side.
+
+The footer line on the slide compresses the four: checked once, boxed into one array, no exit but the imports, same bytes everywhere. That is why a browser can run a binary it has never seen.
+
 ## Sources
 
 - LLVM: [Writing an LLVM Pass](https://llvm.org/docs/WritingAnLLVMNewPMPass.html), [LangRef](https://llvm.org/docs/LangRef.html) (SSA, `nsw`, `fmuladd`), [WebAssembly backend](https://github.com/llvm/llvm-project/tree/main/llvm/lib/Target/WebAssembly)

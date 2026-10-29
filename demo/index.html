@@ -60,6 +60,7 @@
     .legend b { font-weight: 600; } .legend span { color: #b7a9ee; }
     /* race */
     .race { display: grid; grid-template-columns: minmax(0, 760px) minmax(320px, 1fr); gap: 1.2rem; align-items: start; }
+    .race details.jsrc { grid-column: 1 / -1; }
     canvas { width: 100%; height: auto; border-radius: 12px; cursor: crosshair; display: block; background: #000;
              box-shadow: 0 10px 40px rgba(28,20,48,.25); }
     .bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .8rem 0; }
@@ -87,6 +88,8 @@
     .cols3 .pane pre { max-height: 46vh; }
     details.jsrc { margin-top: .8rem; } details.jsrc summary { cursor: pointer; color: var(--violet); font-weight: 600; font-size: .9rem; }
     details.jsrc .pane { margin-top: .5rem; } details.jsrc pre { max-height: 60vh; }
+    .cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+    @media (max-width: 900px) { .cols2 { grid-template-columns: minmax(0, 1fr); } }
     .intgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 520px); gap: 1.2rem; align-items: start; }
     @media (max-width: 1100px) { .cols3 { grid-template-columns: minmax(0, 1fr); } .intgrid { grid-template-columns: minmax(0, 1fr); } }
     .row .val { text-align: right; color: var(--ink); }
@@ -153,7 +156,7 @@
   <h2>Same source, five compilers' worth of effort</h2>
   <p class="sub">fractal.cpp compiled at -O0, -O1, -O2, -O3 and -O3 -msimd128, plus the same algorithm in plain JavaScript. Click the set to zoom.</p>
   <div class="race">
-    <div>
+    <div class="race-left">
       <canvas id="cv" width="720" height="480"></canvas>
       <div class="bar">
         <button id="zoomOut" class="ghost">Zoom out</button>
@@ -175,10 +178,13 @@
       <div class="bar"><button id="raceBtn" class="mint">Race all ▶</button> <span id="raceNote" class="note"></span></div>
       <div class="chart" id="chart"></div>
       <p class="note" id="identical"></p>
-      <details class="jsrc"><summary>Show the JavaScript in this race</summary>
-        <div class="pane"><h3>JavaScript · the same algorithm <em>this is what runs</em></h3><pre id="jsSrc"></pre></div>
-      </details>
     </div>
+      <details class="jsrc"><summary>Show the code in this race: C++ and JavaScript</summary>
+        <div class="cols2">
+          <div class="pane light"><h3>C++ · fractal.cpp <em>what the five modules are built from</em></h3><pre id="cppSrc"></pre></div>
+          <div class="pane"><h3>JavaScript · the same algorithm <em>this is what runs</em></h3><pre id="jsSrc"></pre></div>
+        </div>
+      </details>
   </div>
 </section>
 
@@ -639,6 +645,9 @@ async function fillSources() {
   $('intJsSplit').innerHTML = hiJS(fnv64Split.toString());
   try {
     const src = await (await fetch('fractal.cpp', { cache: 'no-cache' })).text();
+    const strip = t => t.split('\n').filter(l => !/^\/\/ -{10,}$/.test(l)).join('\n');
+    const c0 = src.indexOf('// 1. A template'), c1 = src.indexOf('// 4. The boundary lab');
+    $('cppSrc').innerHTML = hiCPP(strip(src.slice(c0, c1)).trimEnd());
     const a = src.indexOf('// 5. The integer workload');
     const b = src.indexOf('\n}\n', a) + 2;
     $('intCpp').innerHTML = hiCPP(src.slice(a, b).split('\n').filter(l => !/^\/\/ -{10,}$/.test(l)).join('\n'));
