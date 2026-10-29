@@ -63,6 +63,16 @@ LLD's WebAssembly port. It resolves symbols across objects (and static archives)
 
 A separate optimizer that works on the *final* WASM module rather than on LLVM IR. It runs after linking, so it sees the whole program and WASM-specific shapes: it can do module-wide DCE, inline across what used to be object-file boundaries, simplify locals and control flow, and apply transforms LLVM cannot express (Asyncify, which rewrites code to make it pausable, is a Binaryen pass). Emscripten runs it automatically for optimized builds. On this demo, `-O3` from LLVM was already tight enough that `wasm-opt -Oz` did not change the size of the simple version. Say "polish", not "the real optimizer".
 
+Measured on 2026-10-29 with Binaryen 133 (slide 13):
+
+| Module | Before | After `wasm-opt -O3` |
+|---|---|---|
+| fractal-O3.wasm | 2,374 B, 558 instructions | 2,383 B, 558 instructions (locals renumbered; +9 B is a metadata section) |
+| fractal-O0.wasm | 3,432 B, 767 instructions | 2,644 B, 626 instructions |
+| the five specimens | 284 / 374 / 1,142 / 456 / 501 B | unchanged |
+
+Why nothing on the -O3 module: LLVM already had the whole program in one translation unit, with no libc and explicit exports, so inlining, dead-code elimination and local allocation were settled before the bytes existed. Why 23% on the -O0 module: wasm-opt's own inliner, local coalescing and instruction simplification redo much of the middle end after the fact, but not all of it. The four things Binaryen does that LLVM cannot, because they only exist after instruction selection or need every function at once: coalesce locals, peephole the WebAssembly shapes (`if` of constants → the condition), merge identical functions and drop anything no export reaches, and pack data segments so runs of zeros are not shipped.
+
 ## 6. The binary format
 
 A module is `\0asm` + version `1`, then sections, each `id | LEB128 size | payload`. Section ids 1–13 are known; 0 is custom (name-prefixed). The explorer colours them. Things worth saying out loud:
@@ -127,7 +137,7 @@ Timings in a background browser tab are throttled; run the race with the window 
 
 - **Determinism of the output.** All six renderers agree byte-for-byte because IEEE-754 arithmetic is deterministic and no FMA contraction survives to the target. Turn on relaxed-SIMD FMA, or compile for x86 with `-ffast-math`, and they would not. "Same inputs → same bits" is a property you have to defend, not one you get for free.
 - **Determinism of the build.** The `producers` section records the exact compiler. Two engineers with different Clang versions get different bytes for the same source (219 vs 258 for `add.wasm`) and, after an optimizer change, different code. Pinned, hermetic toolchains exist so that "it worked on my machine" is not a sentence anyone has to say.
-- **Correctness you can trust.** The war story on slide 20 is the failure mode of everything in §2: an optimizer transform that is valid under the IR's rules (`nsw`, aliasing, FP contraction) but not under what the program actually relied on. Bisecting that across a large codebase is only possible because builds are reproducible.
+- **Correctness you can trust.** The war story on slide 21 is the failure mode of everything in §2: an optimizer transform that is valid under the IR's rules (`nsw`, aliasing, FP contraction) but not under what the program actually relied on. Bisecting that across a large codebase is only possible because builds are reproducible.
 
 ## 12. The integer race (Tab 4)
 
@@ -150,15 +160,15 @@ Measured (same laptop, foreground Chrome, 4 rounds × 1,382,400 bytes, best of 3
 
 Specimen 5 in Tab 1 is the same loop through the pipeline. At -O2 LLVM unrolls it, so the IR grows from 31 to 58 instructions and the WebAssembly carries several `i64.mul` for one in the source: an optimization that trades bytes for fewer branches.
 
-## 13. The four words from the abstract (slide 16)
+## 13. The four words from the abstract (slide 17)
 
-The abstract promises to demystify stack machines, linear memory, sandboxing and portable binaries. Slide 16 pays that off in four cards; this is the longer version to have in your head.
+The abstract promises to demystify stack machines, linear memory, sandboxing and portable binaries. Slide 17 pays that off in four cards; this is the longer version to have in your head.
 
 **Stack machine.** A register machine says "add r1, r2 into r3". A stack machine says "add", and the operands are whatever the last two instructions left on an implicit stack. `add(a, b)` is `local.get 0`, `i32.const 1`, `i32.shl`, `local.get 1`, `i32.add`: push a, push 1, shift (pops two, pushes one), push b, add (pops two, pushes one), and the one value left is the result. Three consequences. The encoding is tiny because no instruction names registers. Validation is a single linear pass, since the type of every stack slot is known at every instruction, so a module is proven well-typed before any of it runs. And the engine is free to choose real registers when it compiles, which is why Liftoff and TurboFan can both consume the same bytes. The `local.get`/`local.set` instructions are the escape hatch: locals are named slots beside the stack, and `mem2reg` at -O2 is what turns memory traffic into them.
 
 **Linear memory.** The module's entire addressable world is one array of bytes, starting at 0, growable in 64 KiB pages, with nothing else in it: no code, no engine stack frames, no JavaScript objects. A C++ pointer compiles to a plain i32 index into that array. Every `i32.load` and `i32.store` is bounds-checked against the current size (on 64-bit hosts the check is a reserved guard region and a page fault, so it costs nothing). JavaScript holds the same bytes as `memory.buffer`, an ArrayBuffer, which is why strings cross as pointer + length and why `memory.grow()` detaches old views: the buffer object was replaced. wasm-ld lays out the data section, the C++ stack and the heap inside this array before the engine ever sees it (§4).
 
-**Sandbox.** A WebAssembly module has no ambient authority. It cannot name the DOM, a file, a socket, the clock or another module's memory, because there are no instructions for any of them. The only way out is an import: a function JavaScript chose to hand in at instantiation. The demo's modules import nothing, which is why Tab 3's export list is the complete surface. Three mechanisms make the sandbox hold: validation (every instruction well-typed before execution), bounds-checked linear memory (no load or store outside the array), and typed `call_indirect` (a function-pointer call checks the signature, so a corrupted vtable traps instead of jumping somewhere). "Safe" on slide 14 is those three.
+**Sandbox.** A WebAssembly module has no ambient authority. It cannot name the DOM, a file, a socket, the clock or another module's memory, because there are no instructions for any of them. The only way out is an import: a function JavaScript chose to hand in at instantiation. The demo's modules import nothing, which is why Tab 3's export list is the complete surface. Three mechanisms make the sandbox hold: validation (every instruction well-typed before execution), bounds-checked linear memory (no load or store outside the array), and typed `call_indirect` (a function-pointer call checks the signature, so a corrupted vtable traps instead of jumping somewhere). "Safe" on slide 15 is those three.
 
 **Portable binary.** The `.wasm` file is a specification-defined format, not a CPU's. Every compliant engine on every architecture accepts the same bytes and gives the same results, because the semantics (IEEE-754 arithmetic, two's-complement integers, defined trap behaviour) are fixed by the spec, not by the host. The toolchain decides what the bytes say, which is the thesis of the talk; the engine only decides how fast they run. The caveats from §9 still apply: optional features like SIMD must be supported by the engine, and relaxed SIMD trades bit-exactness for speed on purpose. The byte-identical rebuild from a fresh clone (§11) is the same property seen from the build side.
 
