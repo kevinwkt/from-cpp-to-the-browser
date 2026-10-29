@@ -129,6 +129,27 @@ Timings in a background browser tab are throttled; run the race with the window 
 - **Determinism of the build.** The `producers` section records the exact compiler. Two engineers with different Clang versions get different bytes for the same source (219 vs 258 for `add.wasm`) and, after an optimizer change, different code. Pinned, hermetic toolchains exist so that "it worked on my machine" is not a sentence anyone has to say.
 - **Correctness you can trust.** The war story on slide 20 is the failure mode of everything in §2: an optimizer transform that is valid under the IR's rules (`nsw`, aliasing, FP contraction) but not under what the program actually relied on. Bisecting that across a large codebase is only possible because builds are reproducible.
 
+## 12. The integer race (Tab 4)
+
+Tab 4 hashes the frame with FNV-1a, 64 bits: per byte, `h ^= b; h *= 0x100000001b3`. In WebAssembly that is one load, one `i64.xor` and one `i64.mul` per byte, and the chain is serial (each step needs the previous `h`), so neither SIMD nor out-of-order execution helps: the loop runs at the multiplier's latency, about a nanosecond a byte. JavaScript has no 64-bit integer, so the page races the C++ against the two ways JavaScript can express that multiply.
+
+Measured (same laptop, foreground Chrome, 4 rounds × 1,382,400 bytes, best of 3 after warm-up):
+
+| Implementation | Time | vs -O3 |
+|---|---|---|
+| JS · BigInt | 49 ms | 9.6× |
+| JS · 32-bit halves | 20 ms | 3.9× |
+| C++ -O0 | 9 ms | 1.8× |
+| C++ -O3 | 5.1 ms | 1.00× |
+
+- **BigInt** is arbitrary precision. Every `^` and `*` builds a new heap object and the result has to be masked back to 64 bits. V8 has fast paths for values that fit in 64 bits, but the allocation and the generic dispatch stay.
+- **32-bit halves** is the expert's version: the state is two uint32 values and the 64×64→64 multiply is done from 16-bit limbs, ten partial products plus carries, the way Long.js does it. That is about thirty int32 operations per byte with plenty of instruction-level parallelism, and TurboFan compiles them well, which is why it loses by 4× and not 20×. It is still the best a person can do without a 64-bit integer.
+- **-O0 beats both.** The multiply is the same single instruction at every optimization level; -O0 only wraps it in shadow-stack loads and stores. The toolchain gap (-O0 vs -O3) is smaller here than in the fractal because there is less for the optimizer to remove.
+- **Identical hash by construction.** Integer arithmetic mod 2^64 is exact, so the four agree bit for bit. The check also proves that -O0 and -O3 rendered the same frame into their separate memories.
+- **The honest pairing with §10.** On a tight double loop the JIT ties (§10). On 64-bit integers it cannot, and neither can a careful human. Say both on stage; together they are the real answer to "is WebAssembly faster than JavaScript": it depends on whether the work is something JavaScript can say.
+
+Specimen 5 in Tab 1 is the same loop through the pipeline. At -O2 LLVM unrolls it, so the IR grows from 31 to 58 instructions and the WebAssembly carries several `i64.mul` for one in the source: an optimization that trades bytes for fewer branches.
+
 ## Sources
 
 - LLVM: [Writing an LLVM Pass](https://llvm.org/docs/WritingAnLLVMNewPMPass.html), [LangRef](https://llvm.org/docs/LangRef.html) (SSA, `nsw`, `fmuladd`), [WebAssembly backend](https://github.com/llvm/llvm-project/tree/main/llvm/lib/Target/WebAssembly)

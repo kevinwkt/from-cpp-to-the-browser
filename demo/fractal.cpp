@@ -12,6 +12,9 @@
 //   4. extern "C" exports with readable names (no _Z… mangling at the boundary),
 //      plus a few helpers the "boundary lab" calls: i64 → BigInt, strings and
 //      arrays as pointer + length, memory that JS can grow.
+//   5. A 64-bit integer hash over the pixel buffer. One i64.mul per byte.
+//      JavaScript has no 64-bit integer, so the page races this against
+//      BigInt and against a hand-split 32-bit version.
 //
 // Builds with plain clang++ --target=wasm32 -nostdlib: no libc, no libc++,
 // no exceptions, no RTTI. See build.sh.
@@ -170,4 +173,22 @@ EXPORT("upcase") int upcase(u8* p, int n) {
     for (int i = 0; i < n; i++)
         if (p[i] >= 'a' && p[i] <= 'z') { p[i] -= 32; changed++; }
     return changed;
+}
+
+// ---------------------------------------------------------------------------
+// 5. The integer workload: FNV-1a, 64 bits, over the frame.
+//    Per byte: xor, then multiply by a 64-bit prime. That multiply is one
+//    i64.mul here. In JavaScript it is a BigInt (heap-allocated) or ten
+//    16-bit partial products done by hand.
+// ---------------------------------------------------------------------------
+using u64 = unsigned long long;
+
+EXPORT("fnv64") u64 fnv64(const u8* p, int n, int rounds) {
+    u64 h = 14695981039346656037ULL;              // FNV offset basis
+    for (int r = 0; r < rounds; r++)
+        for (int i = 0; i < n; i++) {
+            h ^= p[i];
+            h *= 1099511628211ULL;                // FNV prime: 2^40 + 0x1b3
+        }
+    return h;
 }

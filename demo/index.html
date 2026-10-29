@@ -81,6 +81,14 @@
     .row .fill { height: 100%; background: var(--violet); border-radius: 6px; width: 0; transition: width .25s; }
     .row.js .fill { background: var(--warn); }
     .row.best .fill { background: var(--mint); }
+    .row.js2 .fill { background: #f2c45a; }
+    #intChart .row { grid-template-columns: 11.5rem 1fr 7rem; }
+    .cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; margin-top: .8rem; }
+    .cols3 .pane pre { max-height: 46vh; }
+    details.jsrc { margin-top: .8rem; } details.jsrc summary { cursor: pointer; color: var(--violet); font-weight: 600; font-size: .9rem; }
+    details.jsrc .pane { margin-top: .5rem; } details.jsrc pre { max-height: 60vh; }
+    .intgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 520px); gap: 1.2rem; align-items: start; }
+    @media (max-width: 1100px) { .cols3 { grid-template-columns: minmax(0, 1fr); } .intgrid { grid-template-columns: minmax(0, 1fr); } }
     .row .val { text-align: right; color: var(--ink); }
     .row .val small { color: var(--muted); }
     .note { color: var(--muted); font-size: .9rem; margin-top: .6rem; }
@@ -116,6 +124,7 @@
   <button data-tab="pipe" class="on">1 · The pipeline <kbd>1</kbd></button>
   <button data-tab="race">2 · The optimizer, measured <kbd>2</kbd></button>
   <button data-tab="lab">3 · The boundary lab <kbd>3</kbd></button>
+  <button data-tab="int">4 · Where JS can't tie <kbd>4</kbd></button>
 </nav>
 <div id="status"></div>
 
@@ -166,6 +175,9 @@
       <div class="bar"><button id="raceBtn" class="mint">Race all ▶</button> <span id="raceNote" class="note"></span></div>
       <div class="chart" id="chart"></div>
       <p class="note" id="identical"></p>
+      <details class="jsrc"><summary>Show the JavaScript in this race</summary>
+        <div class="pane"><h3>JavaScript · the same algorithm <em>this is what runs</em></h3><pre id="jsSrc"></pre></div>
+      </details>
     </div>
   </div>
 </section>
@@ -215,7 +227,34 @@
   </div>
 </section>
 
-<footer>Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> switch tabs · <kbd>R</kbd> race · <kbd>S</kbd> surprise me · <kbd>Z</kbd> zoom out · <kbd>0</kbd> reset · <kbd>+</kbd> <kbd>-</kbd> page zoom ·
+<!-- ============================ 4. INTEGER RACE ============================ -->
+<section class="tab" id="tab-int">
+  <h2>Where JavaScript can't tie: 64-bit integers</h2>
+  <p class="sub">FNV-1a, a 64-bit hash, over the frame you just rendered. Per byte: xor, then multiply by a 64-bit prime. JavaScript has no 64-bit integer, so that multiply is a BigInt, or ten 16-bit partial products by hand. In C++ it is one <code>i64.mul</code>.</p>
+  <div class="intgrid">
+    <div>
+      <div class="bar">
+        <button id="intBtn" class="mint">Race ▶</button>
+        <label>rounds over the frame: <input id="intRounds" type="range" min="1" max="8" value="4" step="1"> <span id="intRoundsVal">4</span></label>
+        <span class="note" id="intNote"></span>
+      </div>
+      <div class="chart" id="intChart"></div>
+      <p class="note" id="intSame"></p>
+      <p class="note">Input: the current view rendered by -O0 and -O3 into their own memories; the JavaScript versions read -O3's buffer. The hash must come out identical from all four. Best of 3 after a warm-up; a run over 400 ms is timed once.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="intBytes">—</b><span>bytes per round</span></div>
+      <div class="stat"><b id="intHash" style="font-size:1.05rem">—</b><span>hash</span></div>
+    </div>
+  </div>
+  <div class="cols3">
+    <div class="pane light"><h3>C++ <em>one i64.mul per byte</em></h3><pre id="intCpp"></pre></div>
+    <div class="pane"><h3>JavaScript · BigInt <em>the natural way</em></h3><pre id="intJsBig"></pre></div>
+    <div class="pane"><h3>JavaScript · 32-bit halves <em>the expert way</em></h3><pre id="intJsSplit"></pre></div>
+  </div>
+</section>
+
+<footer>Keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> switch tabs · <kbd>R</kbd> race (tab 2 or 4) · <kbd>S</kbd> surprise me · <kbd>Z</kbd> zoom out · <kbd>0</kbd> reset · <kbd>+</kbd> <kbd>-</kbd> page zoom ·
   <a href="basic.html">the simple version of this demo</a></footer>
 
 <script type="module">
@@ -224,7 +263,9 @@ const status = msg => { $('status').textContent = msg; };
 
 /* ------------------------------------------------------------------ tabs */
 const tabs = [...document.querySelectorAll('nav button')];
+let tabNow = 'pipe';
 function showTab(name) {
+  tabNow = name;
   tabs.forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + name));
   if (name === 'race') draw();
@@ -307,13 +348,17 @@ async function loadModule(id) {
 }
 
 /* The same algorithm in plain JavaScript, written to match fractal.cpp operation for operation. */
-const PAL = new Uint8ClampedArray(256 * 3);
-for (let i = 0; i < 256; i++) {
-  const t = i / 255.0;
-  PAL[i * 3]     = Math.trunc(9.0  * (1 - t) * t * t * t * 255.0);
-  PAL[i * 3 + 1] = Math.trunc(15.0 * (1 - t) * (1 - t) * t * t * 255.0);
-  PAL[i * 3 + 2] = Math.trunc(8.5  * (1 - t) * (1 - t) * (1 - t) * t * 255.0);
+function makePaletteJS() {
+  const PAL = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255.0;
+    PAL[i * 3]     = Math.trunc(9.0  * (1 - t) * t * t * t * 255.0);
+    PAL[i * 3 + 1] = Math.trunc(15.0 * (1 - t) * (1 - t) * t * t * 255.0);
+    PAL[i * 3 + 2] = Math.trunc(8.5  * (1 - t) * (1 - t) * (1 - t) * t * 255.0);
+  }
+  return PAL;
 }
+const PAL = makePaletteJS();
 let jsPix = null;
 function renderJS(cx, cy, scale, maxIter) {
   const aspect = H / W; let total = 0, idx = 0;
@@ -477,6 +522,117 @@ function lab() {
     `${k.padEnd(12)} ${v instanceof WebAssembly.Memory ? `Memory (${v.buffer.byteLength / 65536} pages)` : typeof v === 'function' ? `function, ${v.length} param${v.length === 1 ? '' : 's'}` : typeof v}`).join('\n');
 }
 
+/* ------------------------------------------------------------------ 4. the integer race */
+/* FNV-1a 64 in JavaScript, the natural way: BigInt. Every ^ and * allocates. */
+function fnv64BigInt(bytes, rounds) {
+  let h = 14695981039346656037n;
+  const PRIME = 1099511628211n, MASK64 = (1n << 64n) - 1n;
+  for (let r = 0; r < rounds; r++)
+    for (let i = 0; i < bytes.length; i++) {
+      h ^= BigInt(bytes[i]);
+      h = (h * PRIME) & MASK64;
+    }
+  return h;
+}
+
+/* FNV-1a 64 in JavaScript without BigInt: the state is two uint32 halves, and the
+   64-bit multiply is done by hand from 16-bit limbs, the way Long.js does it. */
+function fnv64Split(bytes, rounds) {
+  let hi = 0xcbf29ce4, lo = 0x84222325;          // 14695981039346656037 = 0xcbf29ce4_84222325
+  const PH = 0x00000100, PL = 0x000001b3;        //  1099511628211       = 0x00000100_000001b3
+  for (let r = 0; r < rounds; r++)
+    for (let i = 0; i < bytes.length; i++) {
+      lo = (lo ^ bytes[i]) >>> 0;
+      // (hi:lo) * (PH:PL), low 64 bits. Ten partial products, carried in 16-bit chunks.
+      const a48 = hi >>> 16, a32 = hi & 0xffff, a16 = lo >>> 16, a00 = lo & 0xffff;
+      const b48 = PH >>> 16, b32 = PH & 0xffff, b16 = PL >>> 16, b00 = PL & 0xffff;
+      let c00 = a00 * b00;
+      let c16 = c00 >>> 16; c00 &= 0xffff;
+      c16 += a16 * b00; let c32 = c16 >>> 16; c16 &= 0xffff;
+      c16 += a00 * b16; c32 += c16 >>> 16; c16 &= 0xffff;
+      c32 += a32 * b00; let c48 = c32 >>> 16; c32 &= 0xffff;
+      c32 += a16 * b16; c48 += c32 >>> 16; c32 &= 0xffff;
+      c32 += a00 * b32; c48 += c32 >>> 16; c32 &= 0xffff;
+      c48 += a48 * b00 + a32 * b16 + a16 * b32 + a00 * b48; c48 &= 0xffff;
+      hi = ((c48 << 16) | c32) >>> 0;
+      lo = ((c16 << 16) | c00) >>> 0;
+    }
+  return (BigInt(hi) << 32n) | BigInt(lo);
+}
+
+const INT_ORDER = ['jsBig', 'jsSplit', 'O0', 'O3'];
+const INT_LABEL = { jsBig: 'JS · BigInt', jsSplit: 'JS · 32-bit halves', O0: 'C++ -O0', O3: 'C++ -O3' };
+const hex64 = h => '0x' + BigInt.asUintN(64, h).toString(16).padStart(16, '0');
+function hashWith(id, rounds) {
+  const n = W * H * 4;
+  if (id === 'jsBig' || id === 'jsSplit') {
+    const bytes = new Uint8Array(mods.O3.mem.buffer, mods.O3.ptr, n);
+    const t0 = performance.now();
+    const h = id === 'jsBig' ? fnv64BigInt(bytes, rounds) : fnv64Split(bytes, rounds);
+    return { ms: performance.now() - t0, h };
+  }
+  const m = mods[id];
+  const t0 = performance.now();
+  const h = m.ex.fnv64(m.ptr, n, rounds);           // i64 result arrives as a BigInt
+  return { ms: performance.now() - t0, h };
+}
+let intRacing = false;
+async function intRace() {
+  if (intRacing || !mods.O3 || !mods.O0) return;
+  intRacing = true; $('intBtn').disabled = true;
+  const rounds = +$('intRounds').value, maxIter = +$('iter').value;
+  for (const id of ['O0', 'O3']) mods[id].ex.render(view.cx, view.cy, view.scale, maxIter);   // same frame in both memories
+  $('intBytes').textContent = (W * H * 4).toLocaleString();
+  const chart = $('intChart'); chart.innerHTML = ''; const rows = {};
+  for (const id of INT_ORDER) {
+    const row = document.createElement('div');
+    row.className = 'row' + (id === 'jsBig' ? ' js' : id === 'jsSplit' ? ' js2' : '');
+    row.innerHTML = `<div class="name">${INT_LABEL[id]}</div><div class="track"><div class="fill"></div></div><div class="val">…</div>`;
+    chart.appendChild(row); rows[id] = row;
+  }
+  const results = {}, hashes = {}; let maxMs = 0;
+  for (const id of INT_ORDER) {
+    $('intNote').textContent = `hashing with ${INT_LABEL[id]}…`;
+    await sleep(30);
+    const warm = hashWith(id, rounds);
+    let best = warm.ms, h = warm.h;
+    if (warm.ms < 400) for (let i = 0; i < 3; i++) { const r = hashWith(id, rounds); best = Math.min(best, r.ms); h = r.h; }
+    results[id] = best; hashes[id] = hex64(h); maxMs = Math.max(maxMs, best);
+    for (const k of INT_ORDER) if (results[k] !== undefined) {
+      rows[k].querySelector('.fill').style.width = (100 * results[k] / maxMs).toFixed(1) + '%';
+      rows[k].querySelector('.val').innerHTML = `${results[k].toFixed(1)} ms` + (k !== 'O3' && results.O3 !== undefined ? ` <small>${(results[k] / results.O3).toFixed(1)}×</small>` : '');
+    }
+  }
+  const bestId = INT_ORDER.reduce((a, b) => results[a] <= results[b] ? a : b);
+  rows[bestId].classList.add('best');
+  const same = INT_ORDER.every(id => hashes[id] === hashes.O3);
+  $('intHash').textContent = hashes.O3;
+  $('intSame').innerHTML = same
+    ? `<span class="badge">identical hash from all 4</span> Same bytes in, same 64 bits out. The milliseconds are the only difference.`
+    : `<span class="badge bad">hashes differ</span> ${INT_ORDER.map(id => INT_LABEL[id] + ': ' + hashes[id]).join(' · ')}`;
+  $('intNote').textContent = `${rounds} round${rounds > 1 ? 's' : ''} × ${(W * H * 4).toLocaleString()} bytes. Times are × relative to -O3.`;
+  intRacing = false; $('intBtn').disabled = false;
+}
+function hiJS(s) {
+  return esc(s)
+    .replace(/(\/\/.*|\/\*[^]*?\*\/)/g, '<span class="cm">$1</span>')
+    .replace(/\b(function|const|let|for|return|BigInt)\b/g, '<span class="kw">$1</span>')
+    .replace(/\b(0x[0-9a-f_]+|\d+n?)\b/g, '<span class="num">$1</span>');
+}
+async function fillSources() {
+  $('jsSrc').innerHTML = hiJS(makePaletteJS.toString() + '\n\n' + renderJS.toString());
+  $('intJsBig').innerHTML = hiJS(fnv64BigInt.toString());
+  $('intJsSplit').innerHTML = hiJS(fnv64Split.toString());
+  try {
+    const src = await (await fetch('fractal.cpp')).text();
+    const a = src.indexOf('// 5. The integer workload');
+    const b = src.indexOf('\n}\n', a) + 2;
+    $('intCpp').innerHTML = hiCPP(src.slice(a, b).split('\n').filter(l => !/^\/\/ -{10,}$/.test(l)).join('\n'));
+  } catch (e) { $('intCpp').textContent = 'see fractal.cpp, section 5'; }
+}
+$('intBtn').onclick = intRace;
+$('intRounds').oninput = () => { $('intRoundsVal').textContent = $('intRounds').value; };
+
 /* ------------------------------------------------------------------ fractal controls */
 cv.addEventListener('click', e => {
   const rect = cv.getBoundingClientRect();
@@ -494,7 +650,8 @@ $('raceBtn').onclick = race;
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   if (e.key === '1') showTab('pipe'); else if (e.key === '2') showTab('race'); else if (e.key === '3') showTab('lab');
-  else if (e.key === 'r' || e.key === 'R') { showTab('race'); race(); }
+  else if (e.key === '4') showTab('int');
+  else if (e.key === 'r' || e.key === 'R') { if (tabNow === 'int') intRace(); else { showTab('race'); race(); } }
   else if (e.key === 's' || e.key === 'S') { showTab('race'); $('surprise').click(); }
   else if (e.key === 'z' || e.key === 'Z') $('zoomOut').click();
   else if (e.key === '0') $('reset').click();
@@ -521,6 +678,7 @@ try {
   document.querySelectorAll('#builds button').forEach(b => b.onclick = () => selectBuild(b.dataset.id));
   selectBuild(mods.O3 ? 'O3' : Object.keys(mods)[0]);
   lab();
+  fillSources();
   const missing = BUILD_IDS.filter(id => !mods[id]);
   if (missing.length) status('Could not load: ' + missing.join(', ') + ' (engine lacks the feature, or run ./build.sh).');
 } catch (e) {

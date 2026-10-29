@@ -334,6 +334,79 @@
      "hex": "0094010f7461726765745f6665617475726573082b0f6d757461626c652d676c6f62616c732b136e6f6e7472617070696e672d6670746f696e742b0b62756c6b2d6d656d6f72792b087369676e2d6578742b0f7265666572656e63652d74797065732b0a6d756c746976616c75652b0f62756c6b2d6d656d6f72792d6f70742b1663616c6c2d696e6469726563742d6f7665726c6f6e67"
     }
    ]
+  },
+  {
+   "id": "05-fnv64",
+   "title": "64-bit integers: one i64.mul",
+   "blurb": "FNV-1a, the hash the integer race runs. Per byte: xor, then multiply by a 64-bit prime. Look for i64.mul in the WebAssembly: one instruction. JavaScript has no 64-bit integer, so the same multiply is a BigInt or ten partial products.",
+   "source": "extern \"C\" unsigned long long fnv64(const unsigned char* p, int n) {\n    unsigned long long h = 14695981039346656037ULL;\n    for (int i = 0; i < n; i++) {\n        h ^= p[i];\n        h *= 1099511628211ULL;\n    }\n    return h;\n}",
+   "ir_O0": "define i64 @fnv64(ptr %0, i32 %1) {\n  %3 = alloca ptr, align 4\n  %4 = alloca i32, align 4\n  %5 = alloca i64, align 8\n  %6 = alloca i32, align 4\n  store ptr %0, ptr %3, align 4\n  store i32 %1, ptr %4, align 4\n  store i64 -3750763034362895579, ptr %5, align 8\n  store i32 0, ptr %6, align 4\n  br label %7\n7:                                                ; preds = %21, %2\n  %8 = load i32, ptr %6, align 4\n  %9 = load i32, ptr %4, align 4\n  %10 = icmp slt i32 %8, %9\n  br i1 %10, label %11, label %24\n11:                                               ; preds = %7\n  %12 = load ptr, ptr %3, align 4\n  %13 = load i32, ptr %6, align 4\n  %14 = getelementptr inbounds i8, ptr %12, i32 %13\n  %15 = load i8, ptr %14, align 1\n  %16 = zext i8 %15 to i64\n  %17 = load i64, ptr %5, align 8\n  %18 = xor i64 %17, %16\n  store i64 %18, ptr %5, align 8\n  %19 = load i64, ptr %5, align 8\n  %20 = mul i64 %19, 1099511628211\n  store i64 %20, ptr %5, align 8\n  br label %21\n21:                                               ; preds = %11\n  %22 = load i32, ptr %6, align 4\n  %23 = add nsw i32 %22, 1\n  store i32 %23, ptr %6, align 4\n  br label %7\n24:                                               ; preds = %7\n  %25 = load i64, ptr %5, align 8\n  ret i64 %25\n}",
+   "ir_O2": "define i64 @fnv64(ptr nofree captures(none) %0, i32 %1) {\n  %3 = icmp sgt i32 %1, 0\n  br i1 %3, label %4, label %27\n4:                                                ; preds = %2\n  %5 = and i32 %1, 3\n  %6 = icmp ult i32 %1, 4\n  br i1 %6, label %11, label %7\n7:                                                ; preds = %4\n  %8 = and i32 %1, 2147483644\n  br label %29\n9:                                                ; preds = %29\n  %10 = icmp eq i32 %5, 0\n  br i1 %10, label %27, label %11\n11:                                               ; preds = %9, %4\n  %12 = phi i32 [ 0, %4 ], [ %56, %9 ]\n  %13 = phi i64 [ -3750763034362895579, %4 ], [ %55, %9 ]\n  %14 = icmp ne i32 %5, 0\n  call void @llvm.assume(i1 %14)\n  br label %15\n15:                                               ; preds = %15, %11\n  %16 = phi i32 [ %24, %15 ], [ %12, %11 ]\n  %17 = phi i64 [ %23, %15 ], [ %13, %11 ]\n  %18 = phi i32 [ %25, %15 ], [ 0, %11 ]\n  %19 = getelementptr inbounds nuw i8, ptr %0, i32 %16\n  %20 = load i8, ptr %19, align 1\n  %21 = zext i8 %20 to i64\n  %22 = xor i64 %17, %21\n  %23 = mul i64 %22, 1099511628211\n  %24 = add nuw nsw i32 %16, 1\n  %25 = add i32 %18, 1\n  %26 = icmp eq i32 %25, %5\n  br i1 %26, label %27, label %15\n27:                                               ; preds = %9, %15, %2\n  %28 = phi i64 [ -3750763034362895579, %2 ], [ %55, %9 ], [ %23, %15 ]\n  ret i64 %28\n29:                                               ; preds = %29, %7\n  %30 = phi i32 [ 0, %7 ], [ %56, %29 ]\n  %31 = phi i64 [ -3750763034362895579, %7 ], [ %55, %29 ]\n  %32 = phi i32 [ 0, %7 ], [ %57, %29 ]\n  %33 = getelementptr inbounds nuw i8, ptr %0, i32 %30\n  %34 = load i8, ptr %33, align 1\n  %35 = zext i8 %34 to i64\n  %36 = xor i64 %31, %35\n  %37 = mul i64 %36, 1099511628211\n  %38 = getelementptr inbounds nuw i8, ptr %0, i32 %30\n  %39 = getelementptr inbounds nuw i8, ptr %38, i32 1\n  %40 = load i8, ptr %39, align 1\n  %41 = zext i8 %40 to i64\n  %42 = xor i64 %37, %41\n  %43 = mul i64 %42, 1099511628211\n  %44 = getelementptr inbounds nuw i8, ptr %0, i32 %30\n  %45 = getelementptr inbounds nuw i8, ptr %44, i32 2\n  %46 = load i8, ptr %45, align 1\n  %47 = zext i8 %46 to i64\n  %48 = xor i64 %43, %47\n  %49 = mul i64 %48, 1099511628211\n  %50 = getelementptr inbounds nuw i8, ptr %0, i32 %30\n  %51 = getelementptr inbounds nuw i8, ptr %50, i32 3\n  %52 = load i8, ptr %51, align 1\n  %53 = zext i8 %52 to i64\n  %54 = xor i64 %49, %53\n  %55 = mul i64 %54, 1099511628211\n  %56 = add nuw nsw i32 %30, 4\n  %57 = add i32 %32, 4\n  %58 = icmp eq i32 %57, %8\n  br i1 %58, label %9, label %29\n}",
+   "wat": "(module\n  (type (;0;) (func (param i32 i32) (result i64)))\n  (func $fnv64 (type 0) (param i32 i32) (result i64)\n    (local i64 i32 i32 i32)\n    local.get 1\n    i32.const 0\n    i32.le_s\n    if  ;; label = @1\n      i64.const -3750763034362895579\n      return\n    end\n    local.get 1\n    i32.const 3\n    i32.and\n    local.set 4\n    block  ;; label = @1\n      block  ;; label = @2\n        local.get 1\n        i32.const 4\n        i32.lt_u\n        if  ;; label = @3\n          i64.const -3750763034362895579\n          local.set 2\n          br 1 (;@2;)\n        end\n        local.get 1\n        i32.const 2147483644\n        i32.and\n        local.set 5\n        i64.const -3750763034362895579\n        local.set 2\n        loop  ;; label = @3\n          local.get 2\n          local.get 0\n          local.get 3\n          i32.add\n          local.tee 1\n          i64.load8_u\n          i64.xor\n          i64.const 1099511628211\n          i64.mul\n          local.get 1\n          i32.const 1\n          i32.add\n          i64.load8_u\n          i64.xor\n          i64.const 1099511628211\n          i64.mul\n          local.get 1\n          i32.const 2\n          i32.add\n          i64.load8_u\n          i64.xor\n          i64.const 1099511628211\n          i64.mul\n          local.get 1\n          i32.const 3\n          i32.add\n          i64.load8_u\n          i64.xor\n          i64.const 1099511628211\n          i64.mul\n          local.set 2\n          local.get 5\n          local.get 3\n          i32.const 4\n          i32.add\n          local.tee 3\n          i32.ne\n          br_if 0 (;@3;)\n        end\n        local.get 4\n        i32.eqz\n        br_if 1 (;@1;)\n      end\n      local.get 0\n      local.get 3\n      i32.add\n      local.set 1\n      loop  ;; label = @2\n        local.get 2\n        local.get 1\n        i64.load8_u\n        i64.xor\n        i64.const 1099511628211\n        i64.mul\n        local.set 2\n        local.get 1\n        i32.const 1\n        i32.add\n        local.set 1\n        local.get 4\n        i32.const 1\n        i32.sub\n        local.tee 4\n        br_if 0 (;@2;)\n      end\n    end\n    local.get 2)\n  (memory (;0;) 1)\n  (export \"memory\" (memory 0))\n  (export \"fnv64\" (func 0))",
+   "counts": {
+    "ir_O0": 31,
+    "ir_O2": 58,
+    "wat": 95,
+    "bytes": 501
+   },
+   "sections": [
+    {
+     "name": "magic + version",
+     "id": null,
+     "offset": 0,
+     "length": 8,
+     "hex": "0061736d01000000"
+    },
+    {
+     "name": "type",
+     "id": 1,
+     "offset": 8,
+     "length": 9,
+     "hex": "01070160027f7f017e"
+    },
+    {
+     "name": "function",
+     "id": 3,
+     "offset": 17,
+     "length": 4,
+     "hex": "03020100"
+    },
+    {
+     "name": "memory",
+     "id": 5,
+     "offset": 21,
+     "length": 5,
+     "hex": "0503010001"
+    },
+    {
+     "name": "export",
+     "id": 7,
+     "offset": 26,
+     "length": 20,
+     "hex": "071202066d656d6f7279020005666e7636340000"
+    },
+    {
+     "name": "code",
+     "id": 10,
+     "offset": 46,
+     "length": 229,
+     "hex": "0ae20101df0102017e037f200141004c044042a5c688a1c89ca7f94b0f0b20014103712104024002402001410449044042a5c688a1c89ca7f94b21020c010b200141fcffffff0771210542a5c688a1c89ca7f94b210203402002200020036a22013100008542b383808080207e200141016a3100008542b383808080207e200141026a3100008542b383808080207e200141036a3100008542b383808080207e21022005200341046a2203470d000b2004450d010b200020036a21010340200220013100008542b383808080207e2102200141016a2101200441016b22040d000b0b20020b"
+    },
+    {
+     "name": "custom: producers",
+     "id": 0,
+     "offset": 275,
+     "length": 75,
+     "hex": "00490970726f64756365727302086c616e6775616765010e435f706c75735f706c75735f3134000c70726f6365737365642d6279010e486f6d656272657720636c616e670632332e312e34"
+    },
+    {
+     "name": "custom: target_features",
+     "id": 0,
+     "offset": 350,
+     "length": 151,
+     "hex": "0094010f7461726765745f6665617475726573082b0f6d757461626c652d676c6f62616c732b136e6f6e7472617070696e672d6670746f696e742b0b62756c6b2d6d656d6f72792b087369676e2d6578742b0f7265666572656e63652d74797065732b0a6d756c746976616c75652b0f62756c6b2d6d656d6f72792d6f70742b1663616c6c2d696e6469726563742d6f7665726c6f6e67"
+    }
+   ]
   }
  ],
  "builds": [
@@ -341,36 +414,36 @@
    "id": "O0",
    "flags": "-O0",
    "file": "fractal-O0.wasm",
-   "bytes": 3209,
-   "instructions": 697
+   "bytes": 3432,
+   "instructions": 783
   },
   {
    "id": "O1",
    "flags": "-O1",
    "file": "fractal-O1.wasm",
-   "bytes": 1820,
-   "instructions": 299
+   "bytes": 1961,
+   "instructions": 354
   },
   {
    "id": "O2",
    "flags": "-O2",
    "file": "fractal-O2.wasm",
-   "bytes": 1948,
-   "instructions": 375
+   "bytes": 2211,
+   "instructions": 487
   },
   {
    "id": "O3",
    "flags": "-O3",
    "file": "fractal-O3.wasm",
-   "bytes": 2116,
-   "instructions": 448
+   "bytes": 2374,
+   "instructions": 561
   },
   {
    "id": "O3-simd",
    "flags": "-O3 -msimd128",
    "file": "fractal-O3-simd.wasm",
-   "bytes": 2462,
-   "instructions": 500
+   "bytes": 2720,
+   "instructions": 613
   }
  ]
 }
